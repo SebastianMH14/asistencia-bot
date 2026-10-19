@@ -23,7 +23,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
-from playwright.sync_api import Page, Response, Route, sync_playwright
+from playwright.sync_api import Locator, Page, Response, Route, sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -106,10 +106,17 @@ def cerrar_aviso(page: Page) -> None:
         paso("aviso de actualización cerrado con OK")
 
 
+def pestana_asistencia(page: Page) -> Locator:
+    """Pestaña "Asistencia" del menú superior (nombre exacto, visible)."""
+    return page.get_by_role("tab", name="Asistencia", exact=True).filter(visible=True).first
+
+
 def iniciar_sesion(page: Page, usuario: str, clave: str) -> None:
     page.goto(URL, wait_until="domcontentloaded")
     page.get_by_placeholder("Nombre de usuario").wait_for(timeout=30_000)
-    page.get_by_role("tab", name="Administración").click()
+    # Siempre exact=True: sin él, el nombre se compara por subcadena (p. ej. la pestaña
+    # "Revisión de asistencia" de la página de inicio también coincide con "Asistencia").
+    page.get_by_role("tab", name="Administración", exact=True).click()
     # El campo de usuario trae readonly (anti-autocompletado) que se quita al recibir el foco.
     campo_usuario = page.get_by_placeholder("Nombre de usuario")
     campo_usuario.click()
@@ -117,9 +124,9 @@ def iniciar_sesion(page: Page, usuario: str, clave: str) -> None:
     campo_clave = page.get_by_placeholder("Contraseña")
     campo_clave.click()
     campo_clave.fill(clave)
-    page.get_by_role("button", name="Iniciar sesión").click()
+    page.get_by_role("button", name="Iniciar sesión", exact=True).click()
     try:
-        page.get_by_role("tab", name="Asistencia").wait_for(timeout=45_000)
+        pestana_asistencia(page).wait_for(timeout=45_000)
     except PlaywrightTimeout:
         mensajes = textos_visibles(page, ".el-message, .el-message-box, .el-form-item__error")
         raise RuntimeError(f"no se completó el inicio de sesión; mensajes: {mensajes}") from None
@@ -130,7 +137,7 @@ def iniciar_sesion(page: Page, usuario: str, clave: str) -> None:
 
 
 def ir_al_reporte(page: Page) -> None:
-    page.get_by_role("tab", name="Asistencia").click()
+    pestana_asistencia(page).click()
     page.wait_for_timeout(1500)
     cerrar_aviso(page)
     # Por texto exacto del nodo de texto: el textContent del <li> incluye un tooltip oculto
