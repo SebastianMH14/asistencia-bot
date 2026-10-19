@@ -39,10 +39,37 @@ API_REGISTROS = "/ISAPI/Bumblebee/AttendancePlugin/V1/Record"
 SALIDA = Path(__file__).parent / "salida"
 ZONA = ZoneInfo("America/Bogota")
 T0 = time.monotonic()
+# Log sin datos personales: pasos, tiempos, conteos, nombres de archivo. Claude lo lee de aquí.
+LOG = SALIDA / f"poc_{datetime.now():%Y%m%d_%H%M%S}.log"
+# Fragmentos del call log de Playwright que ayudan a ubicar un fallo (selectores y estado).
+PISTAS_ERROR = (
+    "waiting for",
+    "resolved to",
+    "not visible",
+    "intercepts pointer events",
+    "not enabled",
+    "not editable",
+    "not stable",
+    "strict mode",
+    "retrying",
+)
 
 
 def paso(mensaje: str) -> None:
-    print(f"[{time.monotonic() - T0:6.1f}s] {mensaje}", flush=True)
+    linea = f"[{time.monotonic() - T0:6.1f}s] {mensaje}"
+    print(linea, flush=True)
+    SALIDA.mkdir(exist_ok=True)
+    with LOG.open("a", encoding="utf-8") as f:
+        f.write(linea + "\n")
+
+
+def pistas(error: Exception) -> list[str]:
+    vistas: list[str] = []
+    for linea in str(error).splitlines()[1:]:
+        limpia = " ".join(linea.split())[:200]
+        if any(p in limpia for p in PISTAS_ERROR) and limpia not in vistas:
+            vistas.append(limpia)
+    return vistas[:10]
 
 
 def periodo_esperado(nombre: str, hoy: date) -> tuple[date, date] | None:
@@ -52,6 +79,9 @@ def periodo_esperado(nombre: str, hoy: date) -> tuple[date, date] | None:
     if nombre == "Mes anterior":
         hasta = hoy.replace(day=1) - timedelta(days=1)
         return hasta.replace(day=1), hasta
+    if nombre == "Mes actual":
+        siguiente = (hoy.replace(day=1) + timedelta(days=32)).replace(day=1)
+        return hoy.replace(day=1), siguiente - timedelta(days=1)
     return None
 
 
@@ -115,9 +145,31 @@ def ir_al_reporte(page: Page) -> None:
     paso(f"en '{REPORTE}'")
 
 
+OPCIONES_PERIODO = (
+    "Hoy",
+    "Ayer",
+    "Semana actual",
+    "Última semana",
+    "Mes actual",
+    "Mes anterior",
+    "Últimos 3 meses",
+    "Últimos 6 meses",
+    "Este año",
+    "Personalizado",
+)
+
+
 def elegir_periodo(page: Page, periodo: str) -> None:
-    selector = page.get_by_placeholder("Por favor, seleccione.").filter(visible=True).first
+    # El desplegable de periodo es el visible cuyo valor actual es una opción de periodo
+    # (hay otros con el mismo placeholder, p. ej. el tamaño de página "100").
+    candidatos = page.get_by_placeholder("Por favor, seleccione.").filter(visible=True)
+    valores = [candidatos.nth(i).input_value() for i in range(candidatos.count())]
+    if not any(v in OPCIONES_PERIODO for v in valores):
+        raise RuntimeError(f"no se encontró el selector de periodo; valores visibles: {valores}")
+    selector = candidatos.nth(next(i for i, v in enumerate(valores) if v in OPCIONES_PERIODO))
+    paso(f"selector de periodo encontrado (valor actual {selector.input_value()!r})")
     selector.click()
+    page.locator(".el-select-dropdown").filter(visible=True).first.wait_for(timeout=10_000)
     page.locator(".el-select-dropdown").filter(visible=True).get_by_text(
         periodo, exact=True
     ).first.click()
@@ -171,7 +223,8 @@ def contar_registros(page: Page, primera: Response) -> tuple[int, int, str]:
     return total, paginas, rango
 
 
-def esperar_archivo(antes: set[str], nombre: str | None, limite_s: float) -> Path:
+def esperar_archivo(antes: set[str], limite_s: float) -> Path:
+    """Cualquier .xlsx en una carpeta nueva del reporte; el nombre se verifica después."""
     fin = time.monotonic() + limite_s
     tamanos: dict[Path, int] = {}
     estables: dict[Path, int] = {}
@@ -180,8 +233,6 @@ def esperar_archivo(antes: set[str], nombre: str | None, limite_s: float) -> Pat
             if carpeta.name in antes or not carpeta.name.startswith(f"{REPORTE}_"):
                 continue
             for archivo in carpeta.glob("*.xlsx"):
-                if nombre and archivo.name != nombre:
-                    continue
                 tam = archivo.stat().st_size
                 estables[archivo] = (
                     estables.get(archivo, 0) + 1 if tamanos.get(archivo) == tam else 0
@@ -193,7 +244,7 @@ def esperar_archivo(antes: set[str], nombre: str | None, limite_s: float) -> Pat
     raise TimeoutError(f"no apareció un archivo estable en {limite_s:.0f} s")
 
 
-def exportar(page: Page, clave: str, nombre: str | None) -> tuple[Path, bool]:
+def exportar(page: Page, clave: str) -> tuple[Path, bool]:
     antes = {p.name for p in DOWNLOADCENTER.iterdir()}
     eventos_descarga: list[str] = []
     page.on("download", lambda d: eventos_descarga.append(d.suggested_filename))
@@ -213,7 +264,7 @@ def exportar(page: Page, clave: str, nombre: str | None) -> tuple[Path, bool]:
     errores = textos_visibles(page, ".el-message--error, .el-form-item__error")
     if errores:
         raise RuntimeError(f"la interfaz mostró un error al exportar: {errores}")
-    archivo = esperar_archivo(antes, nombre, limite_s=120)
+    archivo = esperar_archivo(antes, limite_s=120)
     paso(
         f"archivo estable a los {time.monotonic() - t_clic:.1f} s del clic: {archivo.parent.name}\\{archivo.name}"
     )
@@ -267,20 +318,38 @@ def main() -> int:
         )
         contexto.route("**/*", solo_local)
         page = contexto.new_page()
+        etapa = "inicio"
         try:
+            etapa = "1 iniciar sesión"
+            paso(f"-> {etapa}")
             iniciar_sesion(page, args.usuario, clave)
+            etapa = "2 ir al reporte"
+            paso(f"-> {etapa}")
             ir_al_reporte(page)
+            etapa = "3 elegir periodo"
+            paso(f"-> {etapa}")
             elegir_periodo(page, args.periodo)
+            etapa = "4 elegir grupo"
+            paso(f"-> {etapa}")
             personas, primera = elegir_grupo(page, args.grupo)
+            etapa = "5 contar registros"
+            paso(f"-> {etapa}")
             total_api, paginas, _ = contar_registros(page, primera)
-            archivo, hubo_evento = exportar(page, clave, nombre)
+            etapa = "6 exportar y capturar"
+            paso(f"-> {etapa}")
+            archivo, hubo_evento = exportar(page, clave)
+            etapa = "7 cerrar sesión"
+            paso(f"-> {etapa}")
             cerrar_sesion(page, args.usuario)
         except Exception as e:
             captura = SALIDA / f"poc_error_{datetime.now():%Y%m%d_%H%M%S}.png"
             page.screenshot(path=captura)
             primera_linea = str(e).splitlines()[0][:300] if str(e) else ""
-            paso(f"ERROR {type(e).__name__}: {primera_linea}")
+            paso(f"ERROR en la etapa '{etapa}': {type(e).__name__}: {primera_linea}")
+            for pista in pistas(e):
+                paso(f"   {pista}")
             paso(f"captura local (sensible, no compartir): {captura}")
+            paso(f"log: {LOG}")
             return 2
         finally:
             navegador.close()
@@ -288,6 +357,7 @@ def main() -> int:
     e = inspeccionar(archivo)
     esperado_txt = f"Periodo: {esperado[0]} - {esperado[1]}" if esperado else None
     chequeos = {
+        "nombre_archivo": (e.archivo == nombre) if nombre else None,
         "periodo": (e.periodo == esperado_txt) if esperado_txt else None,
         "departamentos": e.departamentos == {f"General>{args.grupo}"},
         "filas_igual_interfaz": e.filas_datos == total_api,
@@ -307,7 +377,7 @@ def main() -> int:
         "chequeos": chequeos,
         "duracion_s": round(time.monotonic() - T0, 1),
     }
-    print("RESUMEN " + json.dumps(resumen, ensure_ascii=False))
+    paso("RESUMEN " + json.dumps(resumen, ensure_ascii=False))
     return 0 if all(v is not False for v in chequeos.values()) else 1
 
 

@@ -13,7 +13,7 @@ if ($LASTEXITCODE -ne 0) { exit 2 }
 $pruebas = @(
     @{ nombre = '1/3 visible, ultima semana'; args = @() },
     @{ nombre = '2/3 headless, ultima semana'; args = @('--headless') },
-    @{ nombre = '3/3 headless, mes anterior (mas de 100 filas)'; args = @('--headless', '--periodo', 'Mes anterior') }
+    @{ nombre = '3/3 headless, mes actual (186 registros, 2 paginas)'; args = @('--headless', '--periodo', 'Mes actual') }
 )
 
 foreach ($p in $pruebas) {
