@@ -20,12 +20,16 @@ Estado al iniciar la Fase 0 y después de las instalaciones aprobadas el 2026-10
 
 | Herramienta | Al inicio | Ahora |
 |---|---|---|
-| Python | **No instalado.** `python.exe` es solo el alias de la Microsoft Store (exit 9009). No hay lanzador `py`. | **3.13.16**, gestionado por uv en `%APPDATA%\uv\python\cpython-3.13.16-windows-x86_64-none\` |
+| Python | **No instalado.** `python.exe` es solo el alias de la Microsoft Store (exit 9009). No hay lanzador `py`. | **3.13.16**, gestionado por uv en `C:\Users\<usuario>\.uv\python\cpython-3.13.16-windows-x86_64-none\` (ver la corrección más abajo) |
 | uv | No instalado | **0.13.1** (`winget --scope user --skip-dependencies`; el VC++ Redistributable ya está en System32) |
 | git | No instalado | **2.55.0.windows.5** (`C:\Program Files\Git`, Git.Git vía winget) |
 | winget | Disponible (v1.29.380) | — |
 
-Nota: uv crea la unión (junction) `cpython-3.13-windows-x86_64-none` hacia la instalación 3.13.16. La terminal aislada de desarrollo no puede atravesar uniones. Por eso el entorno virtual se crea con la ruta concreta del intérprete.
+**Corrección (2026-10-19):** la app de Claude es MSIX y virtualiza `AppData`. La primera instalación de Python quedó en `...\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\uv\python`, invisible para la terminal del usuario y para el Programador de tareas.
+- Python se reinstaló en **`C:\Users\<usuario>\.uv\python\cpython-3.13.16-windows-x86_64-none\`**, fuera de `AppData`.
+- `.venv` apunta a esa ruta concreta.
+
+Detalle en [ADR-0001](docs/adr/0001-ubicacion-y-python.md).
 | Microsoft Edge | 155.0.4283.62 (`C:\Program Files (x86)\Microsoft\Edge\Application`) |
 | Google Chrome | 155.0.8059.80 (`C:\Program Files\Google\Chrome\Application`) |
 | WebView2 | 155.0.4283.62 |

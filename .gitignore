@@ -36,5 +36,6 @@ traces/
 *.xls
 *.csv
 
-# Exploración local de la Fase 1
+# Exploración local de la Fase 1 (el perfil del navegador guarda cookies de sesión)
 exploracion/salida/
+exploracion/perfil-edge/

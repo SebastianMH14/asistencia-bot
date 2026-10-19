@@ -1,0 +1,175 @@
+# CLAUDE.md — asistencia-bot
+
+Bot en Python que **cada lunes** exporta de HikCentral Access Control el reporte *Registros de entradas y salidas* de la semana anterior (lunes a domingo), **un Excel por grupo**. Envía cada archivo, sin modificarlo, al jefe del grupo, y manda al administrador un resumen con alertas. 
+
+- Arquitectura completa: [`docs/arquitectura.md`](docs/arquitectura.md)
+- Hallazgos del equipo: [`DISCOVERY.md`](DISCOVERY.md)
+- Decisiones: [`docs/adr/`](docs/adr/)
+
+## Estado del proyecto
+
+| Fase | Estado |
+|---|---|
+| 0. Reconocimiento del equipo | Terminada (`DISCOVERY.md`) |
+| 1. Prueba de concepto (login, exportar Fisioterapeutas, capturar el archivo, validar) | **En curso.** Existe el comando de credenciales; falta mapear selectores y elegir la estrategia de captura. |
+| 2. Construcción | Pendiente |
+| 3. Pruebas (unitarias e integración en modo prueba) | Pendiente |
+| 4. Tarea programada y puesta en producción | Pendiente |
+
+**Regla de avance:** no se pasa a la fase siguiente sin mostrarle los hallazgos al usuario y recibir su visto bueno. Cada fase termina con un commit.
+
+## Reglas obligatorias (acordadas con el cliente)
+
+1. **Credenciales:**
+   - Nunca pedir la contraseña en el chat ni escribirla en código, archivos, logs, commits o salida.
+   - Solo se guardan con `asistencia-bot credenciales configurar`, que usa `getpass` y `keyring`; el usuario las escribe.
+   - **Claude no inicia sesión en HikCentral ni escribe contraseñas reales.** Tampoco ejecuta scripts que lo hagan, como el PoC o `ejecutar` contra HikCentral real: los lanza el usuario. Para explorar la interfaz, el usuario inicia sesión y Claude navega después (ver "Explorar HikCentral").
+   - Existe `C:\Program Files\asistencia-bot\.env.txt` con credenciales en texto plano. **No leerlo ni usarlo.** Lo borra el usuario.
+2. **HikCentral es de solo lectura:**
+   - No cambiar usuarios, horarios, departamentos, ruta de descarga ni nada de configuración. Exportar sí está permitido.
+   - Cualquier cambio (ubicación de descarga personalizada, usuario dedicado, OpenAPI) se propone y espera aprobación.
+3. **Correos:** hasta la aprobación explícita del usuario, **todo envío va solo al correo del administrador** (modo prueba). Nunca se envía a los jefes sin su visto bueno.
+4. **Archivos:**
+   - No borrar ni mover nada en `Downloadcenter` ni en carpetas que no haya creado el bot o Claude. Los exportados se **copian** a `salida/`.
+   - Nada de borrados permanentes de archivos ajenos.
+5. **Instalaciones y tareas programadas:** pedir permiso antes de instalar software (incluidos los navegadores de Playwright; hoy se usan Edge y Chrome instalados) y antes de crear tareas en el Programador de tareas.
+6. **Datos personales (Ley 1581 de 2012):**
+   - Los reportes tienen nombres, cédulas y horarios. Nunca van al repositorio, a los logs (en ningún nivel) ni a fixtures; en las pruebas se usan datos sintéticos.
+   - Capturas y traces solo en local, con retención, y solo se envían al administrador.
+   - Al inspeccionar un Excel real, reportar **solo** el nombre del archivo y el conteo de filas, nunca su contenido.
+7. **Sesiones:** el usuario `admin` puede tener una sesión abierta por una persona. Hay que verificar si el login del bot la cierra; si es así, se recomienda un usuario dedicado.
+8. **Git:**
+   - Un commit por fase como mínimo, con mensajes claros en español.
+   - **No hay remoto:** no hacer push ni crear uno sin que el usuario lo pida.
+
+## Comandos
+
+En PowerShell 5.1, desde `C:\Users\<usuario>\asistencia-bot`.
+
+```powershell
+# En cada llamada del shell de Claude: refrescar PATH (uv y git se instalaron después de abrir la app)
+$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+
+uv sync --frozen                         # instala dependencias según uv.lock
+uv run --frozen pytest -q                # pruebas unitarias (excluye @pytest.mark.hikcentral)
+uv run --frozen pytest -m hikcentral     # integración: solo a mano, la lanza el usuario
+uv run --frozen ruff check               # lint
+uv run --frozen ruff format              # formato (usar --check para verificar)
+uv run --frozen mypy                     # mypy --strict sobre src/
+uv run --frozen asistencia-bot --help
+uv run --frozen asistencia-bot credenciales comprobar hikcentral -u admin   # no muestra la contraseña
+uv add <paquete> / uv add --dev <paquete>   # dependencias: siempre con uv, nunca pip directo
+```
+
+- PowerShell 5.1 no tiene `&&`, `||` ni `?:`. Se encadena con `;` o con `if ($?) { ... }`.
+- `.venv\Scripts\asistencia-bot.exe` funciona sin `uv` en el PATH. Es lo que usará la tarea programada.
+
+## Trampas de este equipo (leer antes de instalar o ejecutar)
+
+- **La app de Claude es MSIX y virtualiza `AppData`.**
+  - Lo que el shell de Claude escribe en `%APPDATA%` o `%LOCALAPPDATA%` termina en `C:\Users\<usuario>\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\...`. **El usuario y el Programador de tareas no lo ven.**
+  - **Python del proyecto:** `C:\Users\<usuario>\.uv\python\cpython-3.13.16-windows-x86_64-none\` (ADR-0001). Instalar con `uv python install 3.13 --install-dir C:\Users\<usuario>\.uv\python`.
+  - **Nunca** instalar herramientas en `AppData` desde el shell de Claude. Si algo tiene que quedar en el `AppData` real, se ejecuta en la terminal del usuario (`run_in_terminal`).
+  - Las uniones (junctions) dentro del `AppData` virtualizado no se pueden atravesar. Por eso `.venv` se crea con la ruta concreta del intérprete:
+    `uv venv --clear --python C:\Users\<usuario>\.uv\python\cpython-3.13.16-windows-x86_64-none\python.exe`
+- **El shell no está elevado.** `C:\Program Files\...` no se puede escribir; por eso el proyecto vive en `C:\Users\<usuario>\asistencia-bot`.
+- **Pestañas de terminal del usuario** (`run_in_terminal`): son su shell real, fuera del sandbox. `getpass` funciona ahí. No aceptan pipes, variables ni `$()`: para algo complejo se escribe un `.ps1` y se ejecuta con `powershell -NoProfile -ExecutionPolicy Bypass -File ...`.
+- **El navegador integrado de la app no abre `https://127.0.0.1`.** Hay que usar el Edge de exploración (abajo).
+- **uv y git:**
+  - uv está en `C:\Users\<usuario>\AppData\Local\Microsoft\WinGet\Packages\astral-sh.uv_...\uv.exe` (instalado con winget; es real, no virtualizado).
+  - git está en `C:\Program Files\Git`.
+- La zona horaria es `SA Pacific Standard Time`, equivalente a `America/Bogota`. La cultura es es-ES.
+
+## HikCentral: datos de referencia
+
+- **Versión:** HikCentral Access Control **2.4** (Oversea). La web está en `https://127.0.0.1/#/` (nginx :443, certificado autofirmado).
+- **Ruta del reporte:** Asistencia → Registro de asistencia → **Registros de entradas y salidas**.
+- **Flujo manual:**
+  1. *Personas selec.* → árbol bajo **General** → marcar el grupo → *Aceptar*.
+  2. Periodo **"Última semana"**.
+  3. *Exportar* → formato **Excel** → modo **Predefinido** → *Confirmar contraseña* → *Exportar*.
+- **Grupos:**
+  - Aux. Enfermería, Fisioterapeutas (22 personas), Médicos y Secretarias.
+  - Personal de Apoyo está **excluido** (vacío).
+  - TI: **[Cliente]** falta confirmar.
+- **Las exportaciones las escribe HCWebControl**, no el navegador:
+  - Programa: `C:\Program Files\HCWebControl\HCWebControlService.exe`.
+  - Corre como proceso de `<usuario>` y arranca al iniciar sesión. Habla con la web por WebSocket en `127.0.0.1:15000`.
+  - Destino: `C:\Users\<usuario>\HCWebControlService\Downloadcenter\<Reporte>_<AAAA_MM_DD_HH_MM_SS>\<Reporte>_<desde>_<hasta>.xlsx`.
+  - Logs: `C:\Users\<usuario>\HCWebControlService\log\`.
+- **Excel exportado:**
+  - Filas 1–3 vacías.
+  - Fila 4: título.
+  - Fila 5: `Hora de exportación:`.
+  - Fila 6: `Operador:`.
+  - Fila 7: `Periodo: AAAA-MM-DD - AAAA-MM-DD`.
+  - Fila 8: encabezados (Nombre · Apellido · ID · Departamento · Fecha · Semana · Periodo de tiempo · Hora de registro de entrada · Salida a · Duración · Duración total).
+  - El departamento viene como `General>Fisioterapeutas`.
+  - **No depender de números de fila:** buscar `Periodo:` y la fila de encabezados.
+- **OpenAPI:** no está activa (`/artemis` → 502). Está fuera de alcance; solo es una alternativa futura.
+
+## Explorar HikCentral (Fase 1)
+
+1. El usuario abre un Edge desechable con depuración local, desde su terminal:
+   ```powershell
+   & 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe' --remote-debugging-port=9222 --user-data-dir=C:\Users\<usuario>\asistencia-bot\exploracion\perfil-edge --no-first-run --no-default-browser-check https://127.0.0.1/#/
+   ```
+2. El **usuario** acepta el certificado e inicia sesión. Claude nunca escribe la contraseña.
+3. Claude se conecta con `playwright.chromium.connect_over_cdp("http://127.0.0.1:9222")` desde scripts en `exploracion/` y lee solo los controles (roles, nombres y textos).
+   - **No vuelca tablas con datos de personas.** Si hace falta un conteo, se cuenta sin imprimir el contenido.
+   - En el diálogo de exportar, el usuario escribe la contraseña de confirmación.
+4. Al terminar: cerrar ese Edge. `exploracion/perfil-edge/` está en `.gitignore` porque guarda cookies de sesión.
+
+## Arquitectura (resumen)
+
+Es un hexágono ligero con inyección manual en `bootstrap.py`. Detalle en `docs/arquitectura.md`.
+
+- `domain/` es Python puro: `Periodo`, `Grupo`, `MetadatosReporte`, `ResultadoGrupo`, `Ejecucion`, el cálculo de la semana anterior y las reglas de validación.
+- `ports.py` tiene los `typing.Protocol`: `Reloj`, `AlmacenCredenciales`, `ExtractorAsistencia`, `InspectorReporte`, `Archivador`, `Notificador`, `RenderizadorCorreos` y `RepositorioEstado`.
+- `services/ejecutar_reporte_semanal.py` orquesta extraer → validar → archivar → enviar → resumir, grupo por grupo. Aísla los fallos (un grupo que falla no detiene a los demás).
+- `adapters/` contiene Playwright (`hikcentral/`), openpyxl, smtplib, sqlite3, keyring y jinja2.
+- **Regla de dependencias:**
+  - `domain/` y `services/` **no importan** Playwright, smtplib, keyring, openpyxl, jinja2 ni sqlite3.
+  - Solo `bootstrap.py` instancia adaptadores.
+  - `cli.py` traduce argumentos y códigos de salida (`0` OK, `1` fallo parcial, `2` fatal).
+
+## Convenciones de código
+
+- **Idioma:**
+  - Identificadores, mensajes, docstrings, logs y commits en **español**. Los nombres de librerías y conceptos técnicos se dejan en inglés.
+  - Los textos de la interfaz de HikCentral se escriben exactamente como aparecen, en español.
+- **Tipos:**
+  - Type hints completos; `mypy --strict` sobre `src/` sin errores ni `type: ignore` sin justificar.
+  - En el dominio, `dataclass(frozen=True, slots=True)`.
+  - Puertos como `Protocol`, sin herencia.
+- **Docstrings:** breves y solo donde aportan (el porqué, no el qué).
+- **Selectores de Playwright:**
+  - Todos en `adapters/hikcentral/selectores.py`.
+  - Usar `get_by_role(..., name=...)` y `get_by_text(...)` con texto en español. Nada de XPath frágil ni clases CSS autogeneradas.
+- **Configuración:**
+  - `pydantic` v2 + `pydantic-settings`. Ajustes en TOML y grupos en YAML.
+  - Solo se versionan `config/*.example.*`. Los secretos, solo en `keyring`.
+- **Excel:** `openpyxl` en `read_only=True` y **solo para validar**. El adjunto son los bytes originales, comprobados con SHA-256.
+- **Zona horaria:** `zoneinfo.ZoneInfo("America/Bogota")` (requiere `tzdata` en Windows). Nada de `datetime.now()` sin zona: usar el puerto `Reloj`.
+- **Logs:** registrar conteos, grupos, tiempos, identificadores de ejecución y hashes. **Jamás** nombres, cédulas, horarios individuales ni contraseñas.
+- Mantenerlo **simple**: nada de frameworks de inyección, ORMs ni colas.
+
+## Pruebas
+
+- Las pruebas unitarias **nunca** tocan recursos reales:
+  - **keyring:** un backend en memoria (`keyring.set_keyring`) o un almacén falso vía `monkeypatch` de `bootstrap.crear_almacen_credenciales`.
+  - **SMTP y HikCentral:** fakes de los puertos.
+  - **Excel:** se generan `.xlsx` **sintéticos** en `tests/fixtures/` con la misma estructura (encabezado en la fila 8, `Periodo:` en la fila 7, departamentos `General>X`).
+- Las pruebas contra HikCentral real llevan `@pytest.mark.hikcentral`, quedan excluidas por defecto (`addopts`) y las lanza el usuario.
+- **Metas:**
+  - Cobertura ≥ 80 % en `domain/` y `services/`.
+  - `ruff check`, `ruff format --check`, `mypy` y `pytest` en verde antes de cada commit.
+
+## Pendiente de pedir al cliente (no inventar)
+
+1. ¿TI recibe reporte? (Personal de Apoyo queda excluido.)
+2. Nombre y correo del jefe de cada grupo, y los correos en copia.
+3. Correo del administrador para resúmenes y alertas.
+4. Cuenta remitente: proveedor (Gmail o Microsoft 365), host, puerto y usuario. La contraseña la guarda el usuario con `credenciales configurar smtp`.
+5. Hora del envío del lunes (propuesta: 07:00).
+6. ¿Usuario de HikCentral dedicado al bot o `admin`?
