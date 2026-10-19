@@ -25,9 +25,14 @@ packages = ["src/asistencia_bot"]
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+extend-exclude = ["docs"]  # los bloques de código de la documentación son ilustrativos
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts de exploración de la Fase 1: llevan JavaScript embebido y no son código de producción.
+"exploracion/*" = ["E501"]
 
 [tool.mypy]
 strict = true

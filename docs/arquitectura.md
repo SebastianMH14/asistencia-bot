@@ -87,12 +87,12 @@ Puntos clave:
 
 | # | Hallazgo o restricción | Consecuencia en el diseño |
 |---|---|---|
-| R1 | El Excel lo escribe HCWebControl en `Downloadcenter`; no pasa por el navegador. | Se captura **vigilando la carpeta**. `page.expect_download()` queda como alternativa. **[F1]** ADR-0002. |
+| R1 | El Excel lo escribe HCWebControl en `Downloadcenter`; no pasa por el navegador. Comprobado en la F1: el evento `download` de Playwright **no** se dispara. | Se captura **vigilando la carpeta** ([ADR-0002](adr/0002-captura-por-carpeta.md), aceptada). |
 | R2 | HCWebControl corre solo dentro de la sesión de Windows de `<usuario>`. | La tarea programada corre "solo cuando el usuario haya iniciado sesión" **[F1]**. `verificar` y `ejecutar` comprueban que el proceso esté vivo. |
 | R3 | Tras un reinicio nadie inicia sesión solo (no hay inicio de sesión automático). | Si `<usuario>` no ha iniciado sesión, el bot no corre. La tarea usa "ejecutar lo antes posible si se omitió". El runbook documenta qué hacer. |
 | R4 | HikCentral pide la contraseña al iniciar sesión **y** al exportar. | El extractor la pide al `AlmacenCredenciales` cada vez que la necesita. Nunca la registra ni la guarda en atributos de objetos de larga vida. |
 | R5 | Certificado autofirmado en `127.0.0.1`. | `ignore_https_errors=True` en un contexto de navegador que **solo** puede navegar a `127.0.0.1`: una ruta de Playwright aborta cualquier otro host. |
-| R6 | La tabla en pantalla pagina de a 100 filas. | El validador compara las filas del Excel con el total que muestra la interfaz **[F1]**. Sin ese dato, avisa si hay exactamente 100 filas. |
+| R6 | La tabla pagina de a 100 filas (máximo). **Ni la interfaz ni la API informan el total** (`RecordAllCount=-1`), solo `NextPage`. | El extractor recorre las páginas de la consulta `POST …/AttendancePlugin/V1/Record` (botón "siguiente") y **suma** las longitudes. El validador exige que las filas del Excel sean iguales a esa suma. |
 | R7 | El login del bot podría cerrar la sesión de una persona con `admin`. | Se recomienda un **usuario dedicado** con permisos mínimos. **[F1]**, **[Cliente]**; ADR-0004. |
 | R8 | La OpenAPI de HikCentral no está activa. | Se automatiza la interfaz web. El puerto `ExtractorAsistencia` permite cambiar a OpenAPI sin tocar el servicio. |
 | R9 | El equipo está encendido 24/7, con reinicios esporádicos y cortes de energía. | Idempotencia en SQLite y periodo calculado sobre la fecha de ejecución. Una ejecución tardía sigue enviando la semana anterior. |
@@ -161,9 +161,10 @@ hasta        = desde + timedelta(days=6)
 | lun 2027-01-04 | 2026-12-28 → 2027-01-03 | Cambio de año |
 | lun festivo | Igual que un lunes normal | Los festivos no cambian la semana |
 
-> **Riesgo conocido:** en la interfaz se elige "Última semana", que HikCentral calcula con su propio reloj. En la exportación observada (viernes 2026-10-16 → 2026-10-05…2026-10-11), "Última semana" fue lunes–domingo, igual que nuestro cálculo.
+> **Riesgo conocido:** en la interfaz se elige "Última semana", que HikCentral calcula con su propio reloj.
+> En la F1 se confirmó que la consulta envía `BeginTime=2026-10-12T00:00:00-05:00` y `EndTime=2026-10-18T23:59:59-05:00` (lunes a domingo), igual que nuestro cálculo. La exportación manual del viernes 2026-10-16 también fue lunes–domingo.
 > Si alguna vez difieren, la fila `Periodo:` del Excel no coincide y el grupo **falla sin enviarse**. Así nunca se envía una semana equivocada.
-> Si la interfaz admite un **rango personalizado** **[F1]**, conviene escribir el rango explícito en vez de usar "Última semana".
+> La interfaz **sí tiene "Personalizado"** (rango explícito). Queda como mejora futura: reenvío de periodos arbitrarios, fuera del alcance.
 
 ### 6.3 Reglas de validación (`domain/validacion.py`)
 
@@ -173,8 +174,8 @@ Son funciones puras que reciben `MetadatosReporte`, el `Periodo` esperado y el `
 2. **Encabezados:** deben estar `Nombre`, `Apellido`, `ID`, `Departamento`, `Fecha`, `Hora de registro de entrada` y `Salida a`, sin importar el orden.
 3. **Departamentos:** todos deben terminar en `>{departamento_hik}` (p. ej. `General>Fisioterapeutas`). Un departamento ajeno indica un filtro equivocado y el grupo **falla**.
 4. **Filas:** si hay 0 filas se aplica la política de "sin registros" (sección 10).
-   - Si se conoce el total de la interfaz, las filas del Excel deben ser iguales a ese total.
-   - Si no se conoce y hay exactamente 100 filas, se agrega una **advertencia** (posible corte de página) que no bloquea el envío.
+   - Las filas del Excel deben ser **iguales** a la suma de registros de todas las páginas de la consulta de la interfaz (R6). Si no coinciden, el grupo **falla**.
+   - Si por algún motivo no se pudo contar y hay exactamente un múltiplo de 100 filas, se agrega una **advertencia** (posible corte de página).
 
 ## 7. Puertos
 
@@ -194,7 +195,7 @@ class ExtractorAsistencia(Protocol):
     def __enter__(self) -> "ExtractorAsistencia": ...
     def __exit__(self, *exc: object) -> None: ...
     def exportar(self, grupo: Grupo, periodo: Periodo) -> ReporteExportado: ...
-    def total_en_pantalla(self) -> int | None: ...        # total de la interfaz, si se pudo leer [F1]
+    def registros_en_consulta(self) -> int | None: ...    # suma de páginas de la última consulta (R6)
     def guardar_evidencia(self, etiqueta: str) -> list[Path]: ...  # captura y trace ante un error
 
 class InspectorReporte(Protocol):
@@ -240,10 +241,12 @@ class RepositorioEstado(Protocol):
   - Se prefieren `get_by_role(..., name="…")` y `get_by_text("…")` con los textos en español de la interfaz.
   - No se usan XPath ni clases CSS autogeneradas.
   - Cada selector lleva un comentario con la pantalla donde aparece.
-- **`sesion.py`**: lanza el navegador. Usa `channel="msedge"` o `"chrome"` **[F1]**, porque se usan los navegadores instalados y no hace falta descargar Chromium.
-  - El contexto se crea con `ignore_https_errors=True` y una ruta que **aborta todo host distinto de `127.0.0.1`**.
-  - Hace el login y lo repite **una vez** si aparece la pantalla de login a mitad de la ejecución.
+- **`sesion.py`**: lanza el navegador. Usa `channel="msedge"` o `"chrome"` (ADR-0003), porque se usan los navegadores instalados y no hace falta descargar Chromium.
+  - El contexto se crea con `ignore_https_errors=True`, viewport ≥ 1600×900 (más angosto, el menú superior se colapsa en "…"), `locale="es-ES"` y una ruta que **aborta todo host distinto de `127.0.0.1`**.
+  - Hace el login y lo repite **una vez** si aparece la pantalla de login a mitad de la ejecución. Al terminar, cierra sesión desde el menú del usuario → "Cerrar sesión".
   - Activa el tracing por grupo, pero solo guarda el archivo si hubo error.
+  - **El tracing se pausa** (`tracing.stop_chunk()` / `start_chunk()`) alrededor del login y de la confirmación de la exportación, porque Playwright guarda en el trace el texto de los `fill` y quedaría la contraseña.
+  - Cierra el aviso "Haga clic aquí para actualizar…" con **OK** (`button.refresh-know`), sin marcar "No vuelva a mostrar".
 - **`paginas.py`**: Page Objects.
   - `PaginaLogin`: pestaña *Administración*, usuario, contraseña, *Iniciar sesión*.
   - `PaginaRegistrosEntradasSalidas`: menú *Asistencia → Registro de asistencia → Registros de entradas y salidas*, selector de periodo, botón *Exportar* y lectura del total.
@@ -252,9 +255,9 @@ class RepositorioEstado(Protocol):
   - `CentroDescargas`: estado de la tarea, solo lectura.
 - **`extractor_ui.py`**: hace el flujo de un grupo: seleccionar el grupo, elegir el periodo, exportar y esperar el archivo con `descargas.py`. Devuelve un `ReporteExportado`.
 
-### 8.2 Captura del archivo (`adapters/descargas.py`) **[F1]**
+### 8.2 Captura del archivo (`adapters/descargas.py`)
 
-La estrategia candidata es vigilar la carpeta:
+Se decidió vigilar la carpeta ([ADR-0002](adr/0002-captura-por-carpeta.md)). En la F1 el archivo tardó ~3 s desde el clic hasta quedar estable.
 
 1. **Antes** de pulsar *Exportar*, toma una foto del contenido de `Downloadcenter`: subcarpetas y fecha de creación.
 2. Después espera una carpeta nueva `Registros de entradas y salidas_<AAAA_MM_DD_HH_MM_SS>`, creada después del clic, que contenga `Registros de entradas y salidas_<desde>_<hasta>.xlsx`.
@@ -262,7 +265,7 @@ La estrategia candidata es vigilar la carpeta:
 4. Si pasa el tiempo límite configurable (por defecto 120 s), lanza `ErrorCaptura`. El reintento queda a cargo del servicio.
 5. **Nunca** mueve, renombra ni borra nada en `Downloadcenter`; solo **copia**. Se observaron carpetas de exportación vacías, así que el bot debe tolerarlas.
 
-La alternativa (a) es `page.expect_download()`. Si la Fase 1 muestra que sí se dispara, se compara con esta y se documenta en ADR-0002.
+La alternativa (a), `page.expect_download()`, se descartó: el evento no se dispara porque el archivo no pasa por el navegador.
 
 ### 8.3 Inspector de Excel (`adapters/excel_validador.py`)
 
@@ -429,6 +432,11 @@ grupos:
     activo: true
     jefe: { nombre: "Jefe de ejemplo", correo: "jefe.fisio@ejemplo.com" }
     cc: ["coordinacion@ejemplo.com"]
+  - nombre: Médicos
+    departamento_hik: Medicos   # así, sin tilde, se llama el nodo en HikCentral
+    activo: true
+    jefe: { nombre: "Jefe de ejemplo", correo: "jefe.medicos@ejemplo.com" }
+    cc: []
   - nombre: Personal de Apoyo
     departamento_hik: Personal de Apoyo
     activo: false          # vacío: excluido
@@ -546,7 +554,7 @@ Metas:
 | ADR | Decisión | Estado |
 |---|---|---|
 | [0001](adr/0001-ubicacion-y-python.md) | Ubicación del proyecto y Python fuera de `AppData` | Aceptada |
-| 0002 | Estrategia de captura del archivo (carpeta o evento de descarga) | Pendiente [F1] |
+| [0002](adr/0002-captura-por-carpeta.md) | Captura del Excel vigilando Downloadcenter | Aceptada (falta confirmar en headless) |
 | 0003 | Navegador (Edge, Chrome o Chromium) y modo headless | Pendiente [F1] |
 | 0004 | Usuario de HikCentral para el bot (`admin` o dedicado) | Pendiente [F1], [Cliente] |
 

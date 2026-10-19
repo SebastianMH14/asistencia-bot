@@ -11,7 +11,7 @@ Bot en Python que **cada lunes** exporta de HikCentral Access Control el reporte
 | Fase | Estado |
 |---|---|
 | 0. Reconocimiento del equipo | Terminada (`DISCOVERY.md`) |
-| 1. Prueba de concepto (login, exportar Fisioterapeutas, capturar el archivo, validar) | **En curso.** Existe el comando de credenciales; falta mapear selectores y elegir la estrategia de captura. |
+| 1. Prueba de concepto (login, exportar Fisioterapeutas, capturar el archivo, validar) | **En curso.** Selectores mapeados (`DISCOVERY.md` §7) y captura por carpeta decidida (ADR-0002); la exportación manual validó 65/65 filas. Falta: credencial en keyring, `poc_exportar.py` (visible, headless y `--periodo "Mes anterior"` para >100 filas) y la prueba de sesión. |
 | 2. Construcción | Pendiente |
 | 3. Pruebas (unitarias e integración en modo prueba) | Pendiente |
 | 4. Tarea programada y puesta en producción | Pendiente |
@@ -90,6 +90,7 @@ uv add <paquete> / uv add --dev <paquete>   # dependencias: siempre con uv, nunc
   3. *Exportar* → formato **Excel** → modo **Predefinido** → *Confirmar contraseña* → *Exportar*.
 - **Grupos:**
   - Aux. Enfermería, Fisioterapeutas (22 personas), Médicos y Secretarias.
+  - En el árbol de HikCentral **"Medicos" va sin tilde**, así que `departamento_hik: Medicos`.
   - Personal de Apoyo está **excluido** (vacío).
   - TI: **[Cliente]** falta confirmar.
 - **Las exportaciones las escribe HCWebControl**, no el navegador:
@@ -107,6 +108,11 @@ uv add <paquete> / uv add --dev <paquete>   # dependencias: siempre con uv, nunc
   - El departamento viene como `General>Fisioterapeutas`.
   - **No depender de números de fila:** buscar `Periodo:` y la fila de encabezados.
 - **OpenAPI:** no está activa (`/artemis` → 502). Está fuera de alcance; solo es una alternativa futura.
+- **Consulta de la tabla:** `POST /ISAPI/Bumblebee/AttendancePlugin/V1/Record`, páginas de 100 como máximo, `NextPage` 1/0 y `RecordAllCount=-1`.
+  - **Ni la interfaz ni la API dan el total**: se suman las páginas.
+  - "Última semana" se envía como lunes 00:00 a domingo 23:59:59 en hora -05:00.
+- **El evento `download` de Playwright no se dispara al exportar** (lo hace HCWebControl). Se vigila la carpeta (ADR-0002).
+- **Los traces de Playwright guardan el texto de los `fill`.** Nunca hay que grabar trace durante el login ni durante la confirmación de la exportación.
 
 ## Explorar HikCentral (Fase 1)
 
@@ -119,6 +125,13 @@ uv add <paquete> / uv add --dev <paquete>   # dependencias: siempre con uv, nunc
    - **No vuelca tablas con datos de personas.** Si hace falta un conteo, se cuenta sin imprimir el contenido.
    - En el diálogo de exportar, el usuario escribe la contraseña de confirmación.
 4. Al terminar: cerrar ese Edge. `exploracion/perfil-edge/` está en `.gitignore` porque guarda cookies de sesión.
+
+**Herramientas de `exploracion/`:**
+- **`cdp.py`**: explorador sobre CDP. Comandos `estado`, `controles`, `clic`, `clic-texto`, `clic-con-red`, `arbol`, `conteo-tabla`, `vigilar-exportacion`, `login-controles`, etc. Nunca imprime filas de tablas.
+- **`validar_excel.py`**: estructura de un `.xlsx` (periodo, encabezados, departamentos, conteo, SHA-256), sin datos personales.
+- **`poc_exportar.py`**: PoC completa. Login con keyring, grupo, periodo, conteo de páginas, exportación, captura y validación.
+  - **La ejecuta el usuario**, nunca Claude, porque escribe la contraseña real en HikCentral.
+  - No graba trace. Ante un error guarda una captura en `exploracion/salida/`.
 
 ## Arquitectura (resumen)
 
