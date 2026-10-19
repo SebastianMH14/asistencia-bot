@@ -84,8 +84,13 @@ def iniciar_sesion(page: Page, usuario: str, clave: str) -> None:
     page.goto(URL, wait_until="domcontentloaded")
     page.get_by_placeholder("Nombre de usuario").wait_for(timeout=30_000)
     page.get_by_role("tab", name="Administración").click()
-    page.get_by_placeholder("Nombre de usuario").fill(usuario)
-    page.get_by_placeholder("Contraseña").fill(clave)
+    # El campo de usuario trae readonly (anti-autocompletado) que se quita al recibir el foco.
+    campo_usuario = page.get_by_placeholder("Nombre de usuario")
+    campo_usuario.click()
+    campo_usuario.fill(usuario)
+    campo_clave = page.get_by_placeholder("Contraseña")
+    campo_clave.click()
+    campo_clave.fill(clave)
     page.get_by_role("button", name="Iniciar sesión").click()
     try:
         page.get_by_role("tab", name="Asistencia").wait_for(timeout=45_000)
@@ -202,7 +207,9 @@ def exportar(page: Page, clave: str, nombre: str | None) -> tuple[Path, bool]:
     modo = panel.get_by_placeholder("Predefinido").input_value()
     if modo != "Predefinido":
         raise RuntimeError(f"modo monitor inesperado: {modo!r}")
-    panel.get_by_placeholder("Contraseña").fill(clave)
+    campo_clave = panel.get_by_placeholder("Contraseña")
+    campo_clave.click()
+    campo_clave.fill(clave)
     t_clic = time.monotonic()
     panel.get_by_role("button", name="Exportar", exact=True).click()
     page.wait_for_timeout(1500)

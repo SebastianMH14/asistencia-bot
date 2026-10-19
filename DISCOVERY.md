@@ -122,7 +122,7 @@ Historial de los últimos 45 días (registro de eventos del Sistema):
 | Pantalla o paso | Control | Selector candidato |
 |---|---|---|
 | Login | Pestaña "Administración" (activa por defecto), "Autoservicio" | `get_by_role("tab", name="Administración")` |
-| Login | Usuario y contraseña | `get_by_placeholder("Nombre de usuario")`, `get_by_placeholder("Contraseña")` |
+| Login | Usuario (`#username`) y contraseña (`#password`) | `get_by_placeholder("Nombre de usuario")`, `get_by_placeholder("Contraseña")`. **El campo de usuario trae `readonly` (anti-autocompletado) hasta recibir el foco: hay que hacer clic antes de `fill`.** Así falló la primera corrida de la PoC (timeout de `fill`). |
 | Login | Botón | `get_by_role("button", name="Iniciar sesión")` |
 | Login | Idioma | `input` con valor "Español" (no se toca) |
 | Menú superior | Pestañas Dispositivo · Persona · Control de acceso · **Asistencia** · … | `get_by_role("tab", name="Asistencia")`. Con una ventana angosta se colapsan en "…", así que se usa un viewport ≥ 1600 px. |
