@@ -25,7 +25,7 @@ salida/
 logs/
 estado.db
 estado.db-*
-*.lock
+ejecucion.lock
 capturas/
 traces/
 *.png
