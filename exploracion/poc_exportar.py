@@ -249,17 +249,27 @@ def exportar(page: Page, clave: str) -> tuple[Path, bool]:
     eventos_descarga: list[str] = []
     page.on("download", lambda d: eventos_descarga.append(d.suggested_filename))
     page.locator("button.export-btn").filter(visible=True).first.click()
-    panel = page.get_by_role("dialog", name="Configuración a exportar")
+    # Por CSS: get_by_role(name=...) no lo encuentra porque aria-labelledby apunta a un id
+    # repetido (el-drawer__title). Dentro del panel hay controles ocultos duplicados.
+    panel = (
+        page.locator("[role='dialog'][aria-label='Configuración a exportar']")
+        .filter(visible=True)
+        .first
+    )
     panel.wait_for(timeout=15_000)
-    panel.get_by_role("radio", name="Excel").click()
-    modo = panel.get_by_placeholder("Predefinido").input_value()
+    paso("panel 'Configuración a exportar' abierto")
+    excel = panel.locator("label[title='Excel']").filter(visible=True).first
+    if "is-checked" not in (excel.get_attribute("class") or ""):
+        excel.click()
+    modo = panel.get_by_placeholder("Predefinido").filter(visible=True).first.input_value()
     if modo != "Predefinido":
         raise RuntimeError(f"modo monitor inesperado: {modo!r}")
-    campo_clave = panel.get_by_placeholder("Contraseña")
+    campo_clave = panel.get_by_placeholder("Contraseña").filter(visible=True).first
     campo_clave.click()
     campo_clave.fill(clave)
     t_clic = time.monotonic()
-    panel.get_by_role("button", name="Exportar", exact=True).click()
+    panel.locator("button[title='Exportar']").filter(visible=True).first.click()
+    paso("Exportar pulsado; vigilando Downloadcenter")
     page.wait_for_timeout(1500)
     errores = textos_visibles(page, ".el-message--error, .el-form-item__error")
     if errores:
