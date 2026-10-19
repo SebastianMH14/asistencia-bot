@@ -1,0 +1,40 @@
+# Entorno y herramientas
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Secretos (las credenciales van en keyring, nunca en archivos)
+.env
+.env.*
+*.env.txt
+
+# Configuración real (puede tener correos personales); solo se versionan los *.example.*
+config/settings.toml
+config/grupos.yaml
+
+# Datos generados por el bot (contienen datos personales, Ley 1581)
+salida/
+logs/
+estado.db
+estado.db-*
+*.lock
+capturas/
+traces/
+*.png
+*.zip
+
+# Cualquier Excel real; los de prueba se generan en tests/fixtures con datos sintéticos
+*.xlsx
+*.xls
+*.csv
+
+# Exploración local de la Fase 1
+exploracion/salida/
