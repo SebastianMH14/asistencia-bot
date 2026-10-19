@@ -45,10 +45,6 @@ def paso(mensaje: str) -> None:
     print(f"[{time.monotonic() - T0:6.1f}s] {mensaje}", flush=True)
 
 
-def exacto(texto: str) -> re.Pattern[str]:
-    return re.compile(rf"^\s*{re.escape(texto)}\s*$")
-
-
 def periodo_esperado(nombre: str, hoy: date) -> tuple[date, date] | None:
     if nombre == "Última semana":
         desde = hoy - timedelta(days=hoy.weekday() + 7)
@@ -107,11 +103,12 @@ def ir_al_reporte(page: Page) -> None:
     page.get_by_role("tab", name="Asistencia").click()
     page.wait_for_timeout(1500)
     cerrar_aviso(page)
-    item = page.locator("ul.el-menu li.el-menu-item").filter(has_text=exacto(REPORTE))
+    # Por texto exacto del nodo de texto: el textContent del <li> incluye un tooltip oculto
+    # ("En la página de inicio, añada el elemento de menú a favoritos…").
+    menu = page.locator("ul.el-menu")
+    item = menu.get_by_text(REPORTE, exact=True)
     if not item.filter(visible=True).count():
-        page.locator(".el-submenu__title").filter(has_text=exacto("Registro de asistencia")).filter(
-            visible=True
-        ).first.click()
+        menu.get_by_text("Registro de asistencia", exact=True).filter(visible=True).first.click()
     item.filter(visible=True).first.click()
     page.locator("button.export-btn").filter(visible=True).first.wait_for(timeout=30_000)
     cerrar_aviso(page)
@@ -121,8 +118,8 @@ def ir_al_reporte(page: Page) -> None:
 def elegir_periodo(page: Page, periodo: str) -> None:
     selector = page.get_by_placeholder("Por favor, seleccione.").filter(visible=True).first
     selector.click()
-    page.locator(".el-select-dropdown__item").filter(visible=True).filter(
-        has_text=exacto(periodo)
+    page.locator(".el-select-dropdown").filter(visible=True).get_by_text(
+        periodo, exact=True
     ).first.click()
     page.wait_for_timeout(1000)
     paso(f"periodo elegido: {selector.input_value()!r}")
@@ -227,8 +224,8 @@ def exportar(page: Page, clave: str, nombre: str | None) -> tuple[Path, bool]:
 def cerrar_sesion(page: Page, usuario: str) -> None:
     try:
         page.locator(f"div[role='button'][title='{usuario}']").filter(visible=True).first.hover()
-        page.locator("li.el-dropdown-menu__item").filter(has_text=exacto("Cerrar sesión")).filter(
-            visible=True
+        page.locator(".el-dropdown-menu").filter(visible=True).get_by_text(
+            "Cerrar sesión", exact=True
         ).first.click(timeout=5_000)
         confirmar = page.locator(".el-message-box .el-button--primary").filter(visible=True)
         if confirmar.count():
