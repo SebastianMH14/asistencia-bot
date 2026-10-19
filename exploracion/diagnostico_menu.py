@@ -8,9 +8,8 @@ Uso: uv run --no-sync python exploracion/diagnostico_menu.py
 
 import re
 
-from playwright.sync_api import Locator, sync_playwright
-
 from cdp import _pagina
+from playwright.sync_api import Locator, sync_playwright
 
 REPORTE = "Registros de entradas y salidas"
 SUBMENU = "Registro de asistencia"
