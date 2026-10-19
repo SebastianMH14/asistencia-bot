@@ -59,6 +59,17 @@ def main() -> None:
             "ul.el-menu >> get_by_text(submenú, exact=True)",
             page.locator("ul.el-menu").get_by_text(SUBMENU, exact=True),
         )
+        informar(
+            "PoC: button has_text=r'personas seleccionadas\\s*$'",
+            page.locator("button").filter(has_text=re.compile(r"personas seleccionadas\s*$", re.I)),
+        )
+        informar(
+            "PoC: button has_text=r'^\\s*\\d+ personas seleccionadas'",
+            page.locator("button").filter(has_text=re.compile(r"^\s*\d+ personas seleccionadas")),
+        )
+        boton = page.locator("button").filter(has_text="personas seleccionadas").first
+        if boton.count():
+            print(f"textContent del botón: {boton.evaluate('e => JSON.stringify(e.textContent)')}")
         li = page.locator("ul.el-menu li.el-menu-item").filter(has_text=REPORTE).first
         if li.count():
             texto = li.evaluate("e => JSON.stringify(e.textContent)")
