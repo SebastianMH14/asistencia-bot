@@ -160,11 +160,36 @@ Historial de los últimos 45 días (registro de eventos del Sistema):
 
 Decisión: [ADR-0002](docs/adr/0002-captura-por-carpeta.md).
 
-### 7.4 Otros hallazgos
+### 7.4 PoC automática (`poc_exportar.py`, lanzada por el usuario)
+
+Hubo cinco corridas fallidas, cada una por un selector. Las causas ya están en la tabla 7.1:
+- `readonly` en el campo de usuario.
+- Tooltip oculto en el menú.
+- `aria-labelledby` repetido en el panel de exportación.
+- Pestaña "Asistencia" sin `exact`.
+
+Corridas del **2026-10-20, 05:30–05:32**:
+
+| Prueba | Resultado | Archivo | Filas Excel / suma de páginas de la interfaz | Otros chequeos | Tiempo |
+|---|---|---|---|---|---|
+| Visible, Última semana | OK | `…_2026-10-12_2026-10-18.xlsx` (9 753 B) | 65 / 65 (1 página) | Nombre, periodo y departamento OK; evento `download` = no | 33,5 s |
+| **Headless**, Última semana | OK | `…_2026-10-12_2026-10-18.xlsx` (9 753 B) | 65 / 65 (1 página) | Igual | 26,3 s |
+| Headless, Mes actual | **Diferencia** | `…_2026-10-01_2026-10-31.xlsx` (16 819 B) | **205 / 201** (2 páginas) | Nombre, periodo y departamento OK | 27,2 s |
+
+En todas: login, cierre de aviso, selección de 22 personas, exportación (archivo estable 3,6–4,1 s después del clic) y **cierre de sesión** OK.
+
+**Investigación de la diferencia 205/201 (en curso):**
+- El Excel no tiene filas idénticas repetidas ni más de una fila por persona y fecha: son 205 claves (ID, Fecha) distintas, verificadas con huellas SHA-256 sin imprimir valores.
+- No tiene filas del día en curso (20/10).
+- Todo apunta a que **la suma de páginas de la consulta de la interfaz se queda corta** cuando hay más de una página, o a que la API cuenta distinto.
+- Falta comparar los conteos **por fecha** de la API con los del Excel (`exploracion/estructura_api.py` y `conteo_por_fecha.py`). Hasta resolverlo, la regla de validación "filas = suma de páginas" queda en revisión.
+
+### 7.5 Otros hallazgos
 
 - **Los traces de Playwright guardan el texto de los `fill`**, así que grabarían la contraseña. Hay que pausar el tracing en el login y en la confirmación de la exportación, o no grabar trace en esos pasos.
 - Abrir la pantalla de login en un contexto aislado del navegador **no** cierra la sesión existente.
 - El Edge de exploración quedó con sesión iniciada. Se cierra al terminar la Fase 1.
+- **La sesión expira por inactividad.** Durante la noche del 19 al 20/10 apareció la notificación *"Inicie sesión de nuevo."* (`.el-notification.session-expire-notification`), que **intercepta los clics**. El bot debe detectarla y volver a iniciar sesión.
 
 ## 8. Decisiones y pendientes
 
@@ -176,7 +201,7 @@ Decisión: [ADR-0002](docs/adr/0002-captura-por-carpeta.md).
 | 4 | ¿El login del bot cierra otra sesión de `admin`? | **No.** La PoC inició sesión con `admin` en un navegador nuevo a las 17:30. Después, la sesión del Edge de exploración siguió válida en el servidor (consulta `Record` con `ErrorCode=0` y 65 registros). HikCentral admite sesiones simultáneas del mismo usuario. Igual se recomienda un usuario dedicado por mínimo privilegio y trazabilidad (ADR-0004). |
 | 5 | "Ubicación de descarga personalizada" | El botón existe y no se abrió, para no arriesgar un cambio. Los logs de HCWebControl muestran que todas las exportaciones van a la ruta por defecto. |
 | 6 | Rango personalizado en el filtro de fecha | **Sí existe** ("Personalizado"). Útil a futuro para recuperar semanas; no está en el alcance. |
-| 7 | Exportación con más de 100 filas | Pendiente: PoC con `--periodo "Mes anterior"`, que debería superar 100 filas, comparando con la suma de páginas de la consulta |
-| 8 | Funcionamiento headless | Pendiente: PoC con `--headless` |
-| 9 | Contraseña en `keyring` | Pendiente: el usuario debe completar `credenciales configurar` |
+| 7 | Exportación con más de 100 filas | **El Excel sí trae más de 100 filas** (205, Mes actual). Pero la suma de páginas de la interfaz dio 201: la diferencia está en investigación (§7.4). "Mes anterior" no sirvió para la prueba: solo tiene 16 registros. |
+| 8 | Funcionamiento headless | **OK** (ADR-0003) |
+| 9 | Contraseña en `keyring` | **OK**: guardada por el usuario `<usuario>` el 2026-10-19 |
 | 10 | Datos del cliente (sección 7 del encargo: grupos, jefes, SMTP, hora, usuario dedicado) | Pendiente. No bloquea la Fase 1. |

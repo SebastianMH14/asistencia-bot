@@ -93,7 +93,7 @@ Puntos clave:
 | R4 | HikCentral pide la contraseña al iniciar sesión **y** al exportar. | El extractor la pide al `AlmacenCredenciales` cada vez que la necesita. Nunca la registra ni la guarda en atributos de objetos de larga vida. |
 | R5 | Certificado autofirmado en `127.0.0.1`. | `ignore_https_errors=True` en un contexto de navegador que **solo** puede navegar a `127.0.0.1`: una ruta de Playwright aborta cualquier otro host. |
 | R6 | La tabla pagina de a 100 filas (máximo). **Ni la interfaz ni la API informan el total** (`RecordAllCount=-1`), solo `NextPage`. | El extractor recorre las páginas de la consulta `POST …/AttendancePlugin/V1/Record` (botón "siguiente") y **suma** las longitudes. El validador exige que las filas del Excel sean iguales a esa suma. |
-| R7 | El login del bot podría cerrar la sesión de una persona con `admin`. | Se recomienda un **usuario dedicado** con permisos mínimos. **[F1]**, **[Cliente]**; ADR-0004. |
+| R7 | ~~El login del bot podría cerrar la sesión de una persona con `admin`.~~ **Descartado en la F1:** HikCentral admite sesiones simultáneas. La sesión sí expira por inactividad (notificación "Inicie sesión de nuevo."). | Se recomienda igual un **usuario dedicado** por mínimo privilegio (ADR-0004, **[Cliente]**). El extractor detecta `.session-expire-notification` o la pantalla de login, y vuelve a iniciar sesión una vez. |
 | R8 | La OpenAPI de HikCentral no está activa. | Se automatiza la interfaz web. El puerto `ExtractorAsistencia` permite cambiar a OpenAPI sin tocar el servicio. |
 | R9 | El equipo está encendido 24/7, con reinicios esporádicos y cortes de energía. | Idempotencia en SQLite y periodo calculado sobre la fecha de ejecución. Una ejecución tardía sigue enviando la semana anterior. |
 | R10 | Los reportes tienen nombres, cédulas y horarios (Ley 1581 de 2012). | Sin datos personales en logs, repositorio ni fixtures. Capturas y traces solo en local, con retención y solo para el administrador. |
@@ -554,9 +554,9 @@ Metas:
 | ADR | Decisión | Estado |
 |---|---|---|
 | [0001](adr/0001-ubicacion-y-python.md) | Ubicación del proyecto y Python fuera de `AppData` | Aceptada |
-| [0002](adr/0002-captura-por-carpeta.md) | Captura del Excel vigilando Downloadcenter | Aceptada (falta confirmar en headless) |
-| 0003 | Navegador (Edge, Chrome o Chromium) y modo headless | Pendiente [F1] |
-| 0004 | Usuario de HikCentral para el bot (`admin` o dedicado) | Pendiente [F1], [Cliente] |
+| [0002](adr/0002-captura-por-carpeta.md) | Captura del Excel vigilando Downloadcenter | Aceptada (confirmada en headless) |
+| [0003](adr/0003-navegador-edge-headless.md) | Edge instalado (`channel="msedge"`), headless | Aceptada |
+| [0004](adr/0004-usuario-hikcentral.md) | Usuario de HikCentral para el bot (recomendado: dedicado) | Propuesta [Cliente] |
 
 ## 20. Estructura del repositorio
 
