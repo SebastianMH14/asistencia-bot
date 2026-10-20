@@ -83,3 +83,17 @@ def test_resumir_error_quita_call_log() -> None:
 
     assert resumir_error(error) == "TimeoutError: Locator.click: Timeout 30000ms exceeded."
     assert resumir_error(ValueError()) == "ValueError"
+
+
+def test_resumir_error_incluye_solo_el_selector_esperado() -> None:
+    error = TimeoutError(
+        "Locator.click: Timeout 30000ms exceeded.\nCall log:\n"
+        "  - waiting for locator(\"[role='tab'].el-tabs__item\").filter(visible=True).first\n"
+        "    - locator resolved to <td>Ana Pérez</td>\n"
+    )
+
+    resumen = resumir_error(error)
+
+    assert resumen.startswith("TimeoutError: Locator.click: Timeout 30000ms exceeded. (waiting for")
+    assert "el-tabs__item" in resumen
+    assert "Ana" not in resumen

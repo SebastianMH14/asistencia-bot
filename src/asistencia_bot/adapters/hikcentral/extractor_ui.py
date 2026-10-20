@@ -73,6 +73,11 @@ class ExtractorHikCentralUI:
         """Recarga la página; si la sesión expiró, vuelve a iniciarla (una vez por ejecución)."""
         self._sesion.recargar()
         page = self._sesion.page
+        # Espera a que la página "aterrice": menú del módulo, login o aviso de sesión vencida.
+        with contextlib.suppress(PlaywrightError):
+            s.pestana_modulo(page).or_(s.boton_login_visible(page).first).or_(
+                s.notificacion_sesion_expirada(page).first
+            ).first.wait_for(timeout=self._sesion.timeout_ms)
         expirada = (
             PaginaLogin(page, self._sesion.timeout_ms).visible()
             or s.notificacion_sesion_expirada(page).count() > 0

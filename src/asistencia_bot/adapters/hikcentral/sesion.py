@@ -87,9 +87,13 @@ class SesionNavegador:
         return self._page
 
     def recargar(self) -> None:
-        """Estado limpio para cada grupo (y sin contraseñas en el DOM)."""
-        self.page.goto(self.url, wait_until="domcontentloaded")
-        self.page.wait_for_timeout(1500)
+        """Estado limpio para cada grupo (y sin contraseñas en el DOM).
+
+        Recarga real de la ruta actual. No usar goto(url): con sesión iniciada la página está en
+        `#/portal?...` y un goto a `#/` solo cambia el hash, sin recargar; la aplicación queda
+        en una ruta intermedia sin el menú superior (así falló el primer dry-run).
+        """
+        self.page.reload(wait_until="domcontentloaded")
 
     # --- trace por tramos -----------------------------------------------------------------
 
@@ -165,6 +169,20 @@ class SesionNavegador:
 
 
 def resumir_error(error: BaseException) -> str:
-    """Primera línea del error, sin el call log (que puede traer HTML de la página)."""
-    texto = str(error).split("Call log:")[0].strip().splitlines()
-    return f"{type(error).__name__}: {texto[0][:200] if texto else ''}".rstrip(": ")
+    """Primera línea del error y el selector que se esperaba.
+
+    Del call log solo se toma la línea "waiting for <selector>" (es el selector del bot);
+    el resto puede traer HTML de la página y se descarta.
+    """
+    cabeza, _, call_log = str(error).partition("Call log:")
+    lineas = cabeza.strip().splitlines()
+    resumen = f"{type(error).__name__}: {lineas[0][:200] if lineas else ''}".rstrip(": ")
+    esperando = next(
+        (
+            linea.strip().lstrip("- ").strip()
+            for linea in call_log.splitlines()
+            if linea.strip().lstrip("- ").startswith("waiting for")
+        ),
+        None,
+    )
+    return f"{resumen} ({esperando[:160]})" if esperando else resumen

@@ -125,12 +125,16 @@ def test_estado(tmp_path: Path) -> None:
     )
     db.iniciar_ejecucion(e)
     db.registrar_resultado(e, ResultadoGrupo("Fisioterapeutas", EstadoGrupo.FALLIDO, error="x"))
+    e.fin = datetime(2026, 10, 19, 7, 5)
     db.finalizar_ejecucion(e)
+    en_curso = Ejecucion("fedcba987", datetime(2026, 10, 20, 7), Modo.DRY_RUN, SEMANA, "0.1.0")
+    db.iniciar_ejecucion(en_curso)
 
     r = runner.invoke(cli.app, ["estado", "-c", str(config)])
 
     assert "No hay ejecuciones" in vacio.output
     assert "código 2" in r.output and "[abcdef12]" in r.output
+    assert "en curso o interrumpida  [fedcba98]" in r.output
     assert "Fisioterapeutas: FALLIDO — x" in r.output
     assert "error fatal: algo" in r.output
 

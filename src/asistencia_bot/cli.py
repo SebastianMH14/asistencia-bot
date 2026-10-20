@@ -211,9 +211,10 @@ def estado(
         typer.echo("No hay ejecuciones registradas.")
         return
     for e in ejecuciones:
+        situacion = f"código {e.codigo_salida}" if e.fin else "en curso o interrumpida"
         typer.echo(
             f"{e.inicio:%Y-%m-%d %H:%M}  {e.modo.value:<10} semana {e.periodo.texto_hik()}  "
-            f"código {e.codigo_salida}  [{e.id[:8]}]"
+            f"{situacion}  [{e.id[:8]}]"
         )
         if e.error_fatal:
             typer.echo(f"    error fatal: {e.error_fatal}")
