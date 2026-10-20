@@ -92,7 +92,7 @@ Puntos clave:
 | R3 | Tras un reinicio nadie inicia sesión solo (no hay inicio de sesión automático). | Si `<usuario>` no ha iniciado sesión, el bot no corre. La tarea usa "ejecutar lo antes posible si se omitió". El runbook documenta qué hacer. |
 | R4 | HikCentral pide la contraseña al iniciar sesión **y** al exportar. | El extractor la pide al `AlmacenCredenciales` cada vez que la necesita. Nunca la registra ni la guarda en atributos de objetos de larga vida. |
 | R5 | Certificado autofirmado en `127.0.0.1`. | `ignore_https_errors=True` en un contexto de navegador que **solo** puede navegar a `127.0.0.1`: una ruta de Playwright aborta cualquier otro host. |
-| R6 | La tabla pagina de a 100 filas (máximo). **Ni la interfaz ni la API informan el total** (`RecordAllCount=-1`), solo `NextPage`. | El extractor recorre las páginas de la consulta `POST …/AttendancePlugin/V1/Record` (botón "siguiente") y **suma** las longitudes. El validador exige que las filas del Excel sean iguales a esa suma. |
+| R6 | La tabla pagina de a 100 filas (máximo). **Ni la interfaz ni la API informan el total** (`RecordAllCount=-1`). Además, **la paginación está rota**: con más de dos páginas, la página 2 trae un registro de más y `NextPage=0`, así que el resto es inalcanzable. El Excel sí sale completo. | El extractor recorre las páginas y guarda en memoria las claves `(EmployeeID, Date)`. El validador aplica [ADR-0005](adr/0005-validacion-de-filas.md): con una página, igualdad exacta; con varias, toda clave de la consulta debe estar en el Excel y las filas del Excel deben ser ≥ la suma. |
 | R7 | ~~El login del bot podría cerrar la sesión de una persona con `admin`.~~ **Descartado en la F1:** HikCentral admite sesiones simultáneas. La sesión sí expira por inactividad (notificación "Inicie sesión de nuevo."). | Se recomienda igual un **usuario dedicado** por mínimo privilegio (ADR-0004, **[Cliente]**). El extractor detecta `.session-expire-notification` o la pantalla de login, y vuelve a iniciar sesión una vez. |
 | R8 | La OpenAPI de HikCentral no está activa. | Se automatiza la interfaz web. El puerto `ExtractorAsistencia` permite cambiar a OpenAPI sin tocar el servicio. |
 | R9 | El equipo está encendido 24/7, con reinicios esporádicos y cortes de energía. | Idempotencia en SQLite y periodo calculado sobre la fecha de ejecución. Una ejecución tardía sigue enviando la semana anterior. |
@@ -136,7 +136,8 @@ Todo vive en `domain/`. Son `dataclass(frozen=True, slots=True)` y enums, sin ef
 | `Periodo` | `desde: date`, `hasta: date` | Invariantes: `desde` es lunes y `hasta = desde + 6 días`. Expone `etiqueta()` → `"2026-10-12_2026-10-18"`, `texto_asunto()` → `"12/10 al 18/10/2026"` y `desde_texto_hik("2026-10-12 - 2026-10-18")`. |
 | `Grupo` | `nombre`, `departamento_hik`, `activo`, `correo_jefe`, `nombre_jefe`, `cc: tuple[str, ...]` | `nombre` es el que se muestra (asunto, archivo). `departamento_hik` es el nodo del árbol en HikCentral (p. ej. `Fisioterapeutas`). |
 | `ReporteExportado` | `grupo`, `periodo_solicitado`, `ruta_origen: Path`, `tamano_bytes`, `detectado_en` | Archivo recién capturado en `Downloadcenter`; todavía sin validar. |
-| `MetadatosReporte` | `titulo`, `periodo_texto`, `encabezados: tuple[str, ...]`, `departamentos: frozenset[str]`, `filas: int` | Lo que el adaptador de Excel extrae. **No contiene nombres ni cédulas.** |
+| `MetadatosReporte` | `titulo`, `periodo_texto`, `encabezados: tuple[str, ...]`, `departamentos: frozenset[str]`, `filas: int`, `claves: frozenset[tuple[str, date]]` | Lo que el adaptador de Excel extrae. `claves` = (ID de empleado, fecha) **solo en memoria** para la regla de ADR-0005: nunca se registra, persiste ni envía, y `__repr__` la oculta. Sin nombres. |
+| `ConsultaInterfaz` | `paginas: int`, `registros: int`, `una_pagina: bool`, `claves: frozenset[tuple[str, date]]` | Lo que el extractor vio al recorrer la consulta de la tabla. Las mismas restricciones sobre `claves`. |
 | `ArchivoArchivado` | `ruta: Path`, `sha256: str`, `tamano_bytes` | Copia en `salida/`. |
 | `Modo` (enum) | `PRODUCCION`, `PRUEBA`, `DRY_RUN` | |
 | `EstadoGrupo` (enum) | `ENVIADO`, `VALIDADO_SIN_ENVIO`, `OMITIDO_SIN_REGISTROS`, `OMITIDO_YA_ENVIADO`, `FALLIDO` | `ENVIADO` incluye el envío en modo prueba (el modo queda en `Ejecucion`). |
@@ -173,9 +174,9 @@ Son funciones puras que reciben `MetadatosReporte`, el `Periodo` esperado y el `
 1. **Periodo:** `periodo_texto` debe ser igual a `"<desde> - <hasta>"` (formato ISO observado). Si no, **falla y no se envía**.
 2. **Encabezados:** deben estar `Nombre`, `Apellido`, `ID`, `Departamento`, `Fecha`, `Hora de registro de entrada` y `Salida a`, sin importar el orden.
 3. **Departamentos:** todos deben terminar en `>{departamento_hik}` (p. ej. `General>Fisioterapeutas`). Un departamento ajeno indica un filtro equivocado y el grupo **falla**.
-4. **Filas:** si hay 0 filas se aplica la política de "sin registros" (sección 10).
-   - Las filas del Excel deben ser **iguales** a la suma de registros de todas las páginas de la consulta de la interfaz (R6). Si no coinciden, el grupo **falla**.
-   - Si por algún motivo no se pudo contar y hay exactamente un múltiplo de 100 filas, se agrega una **advertencia** (posible corte de página).
+4. **Filas** ([ADR-0005](adr/0005-validacion-de-filas.md)): si hay 0 filas se aplica la política de "sin registros" (sección 10).
+   - **Consulta de una página:** las filas del Excel deben ser **iguales** a los registros de la consulta. Si no, el grupo **falla**.
+   - **Consulta de varias páginas:** toda clave (ID, fecha) vista en la consulta debe estar en el Excel; si falta alguna, el Excel está truncado y el grupo **falla**. Además, filas del Excel ≥ suma de páginas; la diferencia se informa al administrador y no bloquea.
 
 ## 7. Puertos
 
@@ -195,7 +196,7 @@ class ExtractorAsistencia(Protocol):
     def __enter__(self) -> "ExtractorAsistencia": ...
     def __exit__(self, *exc: object) -> None: ...
     def exportar(self, grupo: Grupo, periodo: Periodo) -> ReporteExportado: ...
-    def registros_en_consulta(self) -> int | None: ...    # suma de páginas de la última consulta (R6)
+    def ultima_consulta(self) -> ConsultaInterfaz | None: ...  # páginas recorridas (R6, ADR-0005)
     def guardar_evidencia(self, etiqueta: str) -> list[Path]: ...  # captura y trace ante un error
 
 class InspectorReporte(Protocol):
@@ -557,6 +558,7 @@ Metas:
 | [0002](adr/0002-captura-por-carpeta.md) | Captura del Excel vigilando Downloadcenter | Aceptada (confirmada en headless) |
 | [0003](adr/0003-navegador-edge-headless.md) | Edge instalado (`channel="msedge"`), headless | Aceptada |
 | [0004](adr/0004-usuario-hikcentral.md) | Usuario de HikCentral para el bot (recomendado: dedicado) | Propuesta [Cliente] |
+| [0005](adr/0005-validacion-de-filas.md) | Validación de filas frente a la paginación rota de HikCentral | Aceptada |
 
 ## 20. Estructura del repositorio
 

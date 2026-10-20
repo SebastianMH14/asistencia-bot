@@ -107,8 +107,18 @@ def cerrar_aviso(page: Page) -> None:
 
 
 def pestana_asistencia(page: Page) -> Locator:
-    """Pestaña "Asistencia" del menú superior (nombre exacto, visible)."""
-    return page.get_by_role("tab", name="Asistencia", exact=True).filter(visible=True).first
+    """Pestaña "Asistencia" del menú superior.
+
+    No sirve get_by_role(name=..., exact=True): cuando la pestaña está activa lleva un botón
+    de cerrar y su nombre accesible deja de ser exactamente "Asistencia". Tampoco sin exact:
+    coincidiría con "Revisión de asistencia" de la página de inicio.
+    """
+    return (
+        page.locator("[role='tab'].el-tabs__item")
+        .filter(has=page.get_by_text("Asistencia", exact=True))
+        .filter(visible=True)
+        .first
+    )
 
 
 def iniciar_sesion(page: Page, usuario: str, clave: str) -> None:

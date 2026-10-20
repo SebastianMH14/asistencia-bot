@@ -125,7 +125,11 @@ Historial de los últimos 45 días (registro de eventos del Sistema):
 | Login | Usuario (`#username`) y contraseña (`#password`) | `get_by_placeholder("Nombre de usuario")`, `get_by_placeholder("Contraseña")`. **El campo de usuario trae `readonly` (anti-autocompletado) hasta recibir el foco: hay que hacer clic antes de `fill`.** Así falló la primera corrida de la PoC (timeout de `fill`). |
 | Login | Botón | `get_by_role("button", name="Iniciar sesión")` |
 | Login | Idioma | `input` con valor "Español" (no se toca) |
-| Menú superior | Pestañas Dispositivo · Persona · Control de acceso · **Asistencia** · … | `get_by_role("tab", name="Asistencia", exact=True)`. **Sin `exact` también coincide con la pestaña "Revisión de asistencia"** de la página de inicio (así falló la quinta corrida). Con una ventana angosta se colapsan en "…", así que se usa un viewport ≥ 1600 px. |
+| Menú superior | Pestañas Dispositivo · Persona · Control de acceso · **Asistencia** · … | `locator("[role='tab'].el-tabs__item").filter(has=get_by_text("Asistencia", exact=True))`. **No usar `get_by_role(name=…)`:**
+- Sin `exact` también coincide con la pestaña "Revisión de asistencia" de la página de inicio (así falló la quinta corrida).
+- Con `exact` falla cuando la pestaña está activa, porque lleva un botón de cerrar que cambia su nombre accesible.
+
+Con una ventana angosta las pestañas se colapsan en "…", así que se usa un viewport ≥ 1600 px. |
 | Aviso | "Haga clic aquí para actualizar los datos…" con **OK** y "No vuelva a mostrar el aviso" | `button.refresh-know` (OK). **La casilla no se marca.** |
 | Menú lateral | Submenú "Registro de asistencia" → **"Registros de entradas y salidas"** | `locator("ul.el-menu").get_by_text("Registros de entradas y salidas", exact=True)`. Alternativa: la clase `li.el-menu-item_attendanceStaffCommutingReport`. **Ojo:** hay un duplicado oculto en "visitados recientemente", y el `textContent` del `li` incluye un tooltip oculto, así que **no** sirve filtrar el `li` con una expresión regular anclada (así falló la segunda corrida de la PoC). |
 | Reporte | Botones Exportar · Guardar diseño · Cargar diseño · Personas seleccionadas · Ordenar · Columna personalizada | `button.export-btn`. **No tocar** Guardar diseño ni Columna personalizada. |
@@ -178,11 +182,22 @@ Corridas del **2026-10-20, 05:30–05:32**:
 
 En todas: login, cierre de aviso, selección de 22 personas, exportación (archivo estable 3,6–4,1 s después del clic) y **cierre de sesión** OK.
 
-**Investigación de la diferencia 205/201 (en curso):**
-- El Excel no tiene filas idénticas repetidas ni más de una fila por persona y fecha: son 205 claves (ID, Fecha) distintas, verificadas con huellas SHA-256 sin imprimir valores.
-- No tiene filas del día en curso (20/10).
-- Todo apunta a que **la suma de páginas de la consulta de la interfaz se queda corta** cuando hay más de una página, o a que la API cuenta distinto.
-- Falta comparar los conteos **por fecha** de la API con los del Excel (`exploracion/estructura_api.py` y `conteo_por_fecha.py`). Hasta resolverlo, la regla de validación "filas = suma de páginas" queda en revisión.
+**Investigación de la diferencia 205/201 (resuelta):**
+- El Excel no tiene filas idénticas repetidas ni más de una fila por persona y fecha: son 205 claves (ID, Fecha) distintas, verificadas con huellas SHA-256 sin imprimir valores. No tiene filas del día en curso (20/10).
+- Comparación por fecha (`comparar_por_fecha.py`): la consulta tenía 1 registro menos el 01, 02, 05 y 06/10.
+- Comparación por persona anonimizada (`comparar_por_persona.py`, cruce `PersonInfo.EmployeeID` = columna "ID"):
+  - 21 de 22 personas coinciden exactamente.
+  - A una persona le faltaban en la consulta sus 4 primeros días, que sí están en el Excel.
+  - No hay ningún registro de la consulta que falte en el Excel.
+- Prueba de tamaño de página (`prueba_tamano_pagina.py`):
+  - Con más de dos páginas, la página 2 trae un registro de más y responde `NextPage=0`: el resto es inalcanzable.
+  - Mes actual: con 100 → 201, con 50 → 101, con 20 → 41. El Excel tiene 205 en todos los casos.
+  - Con la semana (65 registros) y páginas de 50: 50 + 15 = 65, correcto.
+- **Conclusión:** la paginación de la interfaz y de su API está rota; la exportación está completa. Regla de validación nueva en [ADR-0005](docs/adr/0005-validacion-de-filas.md). Con esa regla, la exportación de "Mes actual" **pasa**: todas las claves de la consulta están en el Excel y 205 ≥ 201.
+
+Estructura de la API, solo nombres de campos:
+- Cada registro trae `BaseInfo{Date, WeekDay, PeriodID, PeriodName, PlanBeginTime, PlanEndTime, PlanWorkDurationTime, PersonInfo{PersonID, EmployeeID, FullName, GivenName, FamilyName, DepartmentID, DepartmentName, AttGroupID, AttGroupName, Post, PostID, PersonStatus, DisableReasonID, DisablePersonReason}}`, `SignInTime`, `SignOutTime`, `WorkDurationTime` y `AllWorkDurationTime`.
+- `PersonInfo.EmployeeID` es la columna "ID" del Excel; `PersonID` es un identificador interno.
 
 ### 7.5 Otros hallazgos
 
@@ -201,7 +216,7 @@ En todas: login, cierre de aviso, selección de 22 personas, exportación (archi
 | 4 | ¿El login del bot cierra otra sesión de `admin`? | **No.** La PoC inició sesión con `admin` en un navegador nuevo a las 17:30. Después, la sesión del Edge de exploración siguió válida en el servidor (consulta `Record` con `ErrorCode=0` y 65 registros). HikCentral admite sesiones simultáneas del mismo usuario. Igual se recomienda un usuario dedicado por mínimo privilegio y trazabilidad (ADR-0004). |
 | 5 | "Ubicación de descarga personalizada" | El botón existe y no se abrió, para no arriesgar un cambio. Los logs de HCWebControl muestran que todas las exportaciones van a la ruta por defecto. |
 | 6 | Rango personalizado en el filtro de fecha | **Sí existe** ("Personalizado"). Útil a futuro para recuperar semanas; no está en el alcance. |
-| 7 | Exportación con más de 100 filas | **El Excel sí trae más de 100 filas** (205, Mes actual). Pero la suma de páginas de la interfaz dio 201: la diferencia está en investigación (§7.4). "Mes anterior" no sirvió para la prueba: solo tiene 16 registros. |
+| 7 | Exportación con más de 100 filas | **OK.** El Excel trae todas las filas (205, Mes actual, sin duplicados). La suma de páginas de la interfaz da menos (201) porque la paginación de HikCentral está rota (§7.4). Se valida con la regla de [ADR-0005](docs/adr/0005-validacion-de-filas.md). |
 | 8 | Funcionamiento headless | **OK** (ADR-0003) |
 | 9 | Contraseña en `keyring` | **OK**: guardada por el usuario `<usuario>` el 2026-10-19 |
 | 10 | Datos del cliente (sección 7 del encargo: grupos, jefes, SMTP, hora, usuario dedicado) | Pendiente. No bloquea la Fase 1. |

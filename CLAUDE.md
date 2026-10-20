@@ -11,7 +11,7 @@ Bot en Python que **cada lunes** exporta de HikCentral Access Control el reporte
 | Fase | Estado |
 |---|---|
 | 0. Reconocimiento del equipo | Terminada (`DISCOVERY.md`) |
-| 1. Prueba de concepto (login, exportar Fisioterapeutas, capturar el archivo, validar) | **En curso.** Selectores mapeados (`DISCOVERY.md` §7) y captura por carpeta decidida (ADR-0002); la exportación manual validó 65/65 filas. Falta: credencial en keyring, `poc_exportar.py` (visible, headless y `--periodo "Mes anterior"` para >100 filas) y la prueba de sesión. |
+| 1. Prueba de concepto (login, exportar Fisioterapeutas, capturar el archivo, validar) | **Terminada (2026-10-20), pendiente del visto bueno.** La PoC funciona en modo visible y headless, con captura por carpeta, cierre de sesión y sin cerrar otras sesiones. Más de 100 filas: el Excel está completo y la paginación de la interfaz está rota (ADR-0005). ADRs 0001–0005. |
 | 2. Construcción | Pendiente |
 | 3. Pruebas (unitarias e integración en modo prueba) | Pendiente |
 | 4. Tarea programada y puesta en producción | Pendiente |
@@ -109,8 +109,17 @@ uv add <paquete> / uv add --dev <paquete>   # dependencias: siempre con uv, nunc
   - **No depender de números de fila:** buscar `Periodo:` y la fila de encabezados.
 - **OpenAPI:** no está activa (`/artemis` → 502). Está fuera de alcance; solo es una alternativa futura.
 - **Consulta de la tabla:** `POST /ISAPI/Bumblebee/AttendancePlugin/V1/Record`, páginas de 100 como máximo, `NextPage` 1/0 y `RecordAllCount=-1`.
-  - **Ni la interfaz ni la API dan el total**: se suman las páginas.
+  - **Ni la interfaz ni la API dan el total.**
+  - **La paginación está rota:** con más de dos páginas, la página 2 trae `PageSize+1` y `NextPage=0`.
+  - El Excel sale completo. Validación según ADR-0005: con una página, igualdad; con varias, las claves (EmployeeID, Date) de la consulta deben estar contenidas en el Excel.
   - "Última semana" se envía como lunes 00:00 a domingo 23:59:59 en hora -05:00.
+  - Cada registro trae `BaseInfo.Date` (fecha) y `BaseInfo.PersonInfo.EmployeeID`, que equivale a la columna "ID" del Excel.
+- **Selectores frágiles ya resueltos** (detalle en `DISCOVERY.md` §7.1):
+  - La pestaña "Asistencia" se busca por texto exacto dentro de `[role=tab].el-tabs__item`, no con `get_by_role(name=…)`.
+  - El `#username` del login trae `readonly` hasta el foco: hay que hacer clic antes de `fill`.
+  - Para el menú se usa `get_by_text(exact=True)`, porque el `li` tiene un tooltip oculto.
+  - El panel de exportación se busca por CSS `aria-label`, con los controles filtrados por visibles.
+- **La sesión expira por inactividad:** aparece la notificación `.session-expire-notification` ("Inicie sesión de nuevo.").
 - **El evento `download` de Playwright no se dispara al exportar** (lo hace HCWebControl). Se vigila la carpeta (ADR-0002).
 - **Los traces de Playwright guardan el texto de los `fill`.** Nunca hay que grabar trace durante el login ni durante la confirmación de la exportación.
 
