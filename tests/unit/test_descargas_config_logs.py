@@ -136,6 +136,25 @@ def test_carga_config_y_grupos(tmp_path: Path) -> None:
     assert "no está habilitado" in cfg.problemas_para_modo(Modo.PRODUCCION)[0]
 
 
+def test_carpeta_de_descargas_por_defecto_en_el_perfil(tmp_path: Path) -> None:
+    cfg = cargar(_config(tmp_path))
+
+    assert cfg.ajustes.hikcentral.carpeta_descargas == (
+        Path.home() / "HCWebControlService" / "Downloadcenter"
+    )
+
+
+def test_los_ejemplos_versionados_cargan(tmp_path: Path) -> None:
+    raiz = Path(__file__).resolve().parents[2] / "config"
+    settings = (raiz / "settings.example.toml").read_text(encoding="utf-8")
+    grupos = (raiz / "grupos.example.yaml").read_text(encoding="utf-8")
+
+    cfg = cargar(_config(tmp_path, settings, grupos))
+
+    assert len(cfg.grupos_activos) == 4
+    assert cfg.problemas_para_modo(Modo.PRUEBA) == []
+
+
 def test_variables_de_entorno_sobrescriben(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ASISTENCIA_BOT_HIKCENTRAL__HEADLESS", "false")
 

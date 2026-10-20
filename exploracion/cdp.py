@@ -148,7 +148,7 @@ def _resumir_respuesta(resp: object) -> None:
         print(f"    {linea}")
 
 
-DOWNLOADCENTER = r"C:\Users\<usuario>\HCWebControlService\Downloadcenter"
+DOWNLOADCENTER = str(Path.home() / "HCWebControlService" / "Downloadcenter")
 
 
 def _metodos_ws(carga: str | bytes) -> str:

@@ -45,7 +45,10 @@ class ConfigHikCentral(_Modelo):
     headless: bool = True
     timeout_ui_s: float = Field(default=30, gt=0)
     timeout_captura_s: float = Field(default=120, gt=0)
-    carpeta_descargas: Path = Path(r"C:\Users\<usuario>\HCWebControlService\Downloadcenter")
+    # Por defecto, la carpeta que usa HCWebControl en el perfil del usuario de Windows.
+    carpeta_descargas: Path = Field(
+        default_factory=lambda: Path.home() / "HCWebControlService" / "Downloadcenter"
+    )
     puerto_hcwebcontrol: int = Field(default=15000, gt=0, lt=65536)
     trace_en_error: bool = True
 

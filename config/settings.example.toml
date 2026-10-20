@@ -15,7 +15,8 @@ navegador = "msedge"              # msedge | chrome (navegadores instalados; ADR
 headless = true                   # false o --visible para depurar
 timeout_ui_s = 30                 # espera máxima por control de la interfaz
 timeout_captura_s = 120           # espera máxima del Excel en Downloadcenter
-carpeta_descargas = 'C:\Users\<usuario>\HCWebControlService\Downloadcenter'
+# Por defecto: %USERPROFILE%\HCWebControlService\Downloadcenter. Descomentar solo si cambió.
+# carpeta_descargas = 'C:\Users\<usuario>\HCWebControlService\Downloadcenter'
 puerto_hcwebcontrol = 15000
 trace_en_error = true             # trace de Playwright solo de los fallos (sin contraseñas)
 
@@ -32,7 +33,7 @@ sin_registros = "omitir_y_reportar"   # o "enviar_aviso_sin_registros"
 [rutas]
 # Base de salida/, logs/, capturas/, traces/, estado.db y ejecucion.lock.
 # Si se omite, es la carpeta del proyecto (la que contiene config/).
-base = 'C:\Users\<usuario>\asistencia-bot'
+# base = 'C:\Users\<usuario>\asistencia-bot'
 
 [retencion]
 excel_dias = 180

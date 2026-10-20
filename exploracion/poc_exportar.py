@@ -33,7 +33,7 @@ from asistencia_bot.adapters.credenciales_keyring import AlmacenKeyring
 
 URL = "https://127.0.0.1/#/"
 HOSTS_PERMITIDOS = {"127.0.0.1", "localhost"}
-DOWNLOADCENTER = Path(r"C:\Users\<usuario>\HCWebControlService\Downloadcenter")
+DOWNLOADCENTER = Path.home() / "HCWebControlService" / "Downloadcenter"
 REPORTE = "Registros de entradas y salidas"
 API_REGISTROS = "/ISAPI/Bumblebee/AttendancePlugin/V1/Record"
 SALIDA = Path(__file__).parent / "salida"

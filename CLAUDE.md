@@ -43,6 +43,11 @@ Bot en Python que **cada lunes** exporta de HikCentral Access Control el reporte
    - El remoto es `origin` = `https://github.com/SebastianMH14/asistencia-bot`.
    - **Solo hacer push cuando el usuario lo pida.** Se hace desde la terminal del usuario, porque GitHub puede pedir autenticación y esa la hace él.
    - Nunca hacer push forzado.
+   - **El repositorio es PÚBLICO.**
+     - Autor de los commits: `SebastianMH14 <77866016+SebastianMH14@users.noreply.github.com>`, configurado en el repo.
+     - Nunca escribir en archivos versionados el nombre del cliente, el nombre del equipo, el usuario de Windows, la versión exacta de HikCentral, puertos internos ni datos personales. En la documentación se usan `<usuario>` y "el cliente".
+     - Antes de cada push, revisar el diff con eso en mente.
+   - Solo se sube `main`. `refs/original/` guarda el historial previo al saneamiento (2026-10-20) y es **solo local**: nunca usar `git push --all` ni `--mirror`.
 
 ## Comandos
 
