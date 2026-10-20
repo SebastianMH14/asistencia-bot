@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es">
+<body style="font-family: Segoe UI, Arial, sans-serif; font-size: 13px; color: #222; line-height: 1.4;">
+  <h2 style="margin: 0 0 4px; font-size: 18px;">Reportes de asistencia: {{ estado_general }}</h2>
+  <p style="margin: 0 0 12px; color: #555;">
+    Semana del {{ desde }} al {{ hasta }} · modo <strong>{{ modo }}</strong> · código de salida {{ codigo }}
+  </p>
+  {% if error_fatal %}
+  <p style="padding: 8px 10px; background: #fdecea; border-left: 4px solid #c62828;">
+    <strong>Error fatal:</strong> {{ error_fatal }}
+  </p>
+  {% endif %}
+  <table cellpadding="6" cellspacing="0" style="border-collapse: collapse; font-size: 13px;">
+    <thead>
+      <tr style="background: #f0f0f0; text-align: left;">
+        <th>Grupo</th><th>Estado</th><th>Filas Excel</th><th>Consulta</th>
+        <th>Destinatarios</th><th>Archivo</th><th>Intentos</th><th>Tiempo</th><th>Detalle</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in resultados %}
+      <tr style="border-top: 1px solid #ddd; vertical-align: top;">
+        <td>{{ r.grupo }}</td>
+        <td style="font-weight: 600; color: {{ r.color }};">{{ r.estado }}</td>
+        <td>{{ r.filas }}</td>
+        <td>{{ r.consulta }}</td>
+        <td>{{ r.destinatarios }}</td>
+        <td>{{ r.archivo }}</td>
+        <td>{{ r.intentos }}</td>
+        <td>{{ r.duracion }}</td>
+        <td>
+          {% if r.error %}<span style="color: #c62828;">{{ r.error }}</span>{% endif %}
+          {% for a in r.advertencias %}<div style="color: #8a6d00;">⚠ {{ a }}</div>{% endfor %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9">No se procesó ningún grupo.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if hay_adjuntos %}
+  <p style="color: #8a6d00;">
+    Se adjuntan capturas o traces de los fallos. Pueden contener datos personales: no los reenvíe.
+  </p>
+  {% endif %}
+  <p style="color: #666; font-size: 12px; margin-top: 16px;">
+    Ejecución {{ id }} · inicio {{ inicio }} · duración {{ duracion }} · versión {{ version }} · equipo {{ equipo }}
+  </p>
+</body>
+</html>

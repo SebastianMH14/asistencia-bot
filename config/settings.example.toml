@@ -1,0 +1,53 @@
+# Configuración del bot de reportes de asistencia.
+# Copie este archivo a config/settings.toml (que NO se versiona) y complételo.
+# Los secretos NO van aquí: use `asistencia-bot credenciales configurar ...` (keyring).
+# Cualquier valor se puede sobrescribir con variables de entorno, p. ej.
+#   ASISTENCIA_BOT_HIKCENTRAL__HEADLESS=false
+# Rutas de Windows: use comillas simples para que las barras invertidas sean literales.
+
+# Archivo de grupos, relativo a esta carpeta.
+archivo_grupos = "grupos.yaml"
+
+[hikcentral]
+url = "https://127.0.0.1/#/"
+usuario = "admin"                 # recomendado: un usuario dedicado al bot (ADR-0004)
+navegador = "msedge"              # msedge | chrome (navegadores instalados; ADR-0003)
+headless = true                   # false o --visible para depurar
+timeout_ui_s = 30                 # espera máxima por control de la interfaz
+timeout_captura_s = 120           # espera máxima del Excel en Downloadcenter
+carpeta_descargas = 'C:\Users\<usuario>\HCWebControlService\Downloadcenter'
+puerto_hcwebcontrol = 15000
+trace_en_error = true             # trace de Playwright solo de los fallos (sin contraseñas)
+
+[ejecucion]
+zona_horaria = "America/Bogota"
+# "prueba" envía TODO solo al administrador. Producción exige además produccion_habilitada.
+modo_por_defecto = "prueba"
+produccion_habilitada = false     # cambiar a true solo con la aprobación del cliente
+reintentos = 3                    # intentos por grupo ante fallos transitorios
+espera_inicial_s = 30             # espera exponencial entre intentos: 30, 60, 120…
+espera_maxima_s = 120
+sin_registros = "omitir_y_reportar"   # o "enviar_aviso_sin_registros"
+
+[rutas]
+# Base de salida/, logs/, capturas/, traces/, estado.db y ejecucion.lock.
+# Si se omite, es la carpeta del proyecto (la que contiene config/).
+base = 'C:\Users\<usuario>\asistencia-bot'
+
+[retencion]
+excel_dias = 180
+logs_dias = 90
+evidencias_dias = 90              # capturas y traces (contienen datos personales)
+
+[smtp]
+# Microsoft 365: smtp.office365.com:587 · Gmail: smtp.gmail.com:587 (contraseña de aplicación)
+host = "smtp.office365.com"
+puerto = 587
+usuario = "reportes@ejemplo.com"
+remitente = "Reportes de asistencia <reportes@ejemplo.com>"
+starttls = true
+timeout_s = 30
+reintentos = 3
+
+[administrador]
+correo = "admin@ejemplo.com"      # recibe resúmenes, alertas y, en modo prueba, todo

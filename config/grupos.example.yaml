@@ -1,0 +1,42 @@
+# Grupos que reciben el reporte semanal. Copie a config/grupos.yaml (NO se versiona).
+#
+# nombre:            como aparece en el asunto y en el nombre del archivo.
+# departamento_hik:  nombre EXACTO del nodo bajo "General" en HikCentral (ojo: "Medicos" sin tilde).
+# activo:            false para excluir el grupo sin borrarlo.
+# jefe:              obligatorio en producción; en prueba y dry-run puede faltar.
+# cc:                correos en copia (lista, puede estar vacía).
+#
+# Los datos de abajo son de ejemplo.
+
+grupos:
+  - nombre: Aux. Enfermería
+    departamento_hik: Aux. Enfermería
+    activo: true
+    jefe: { nombre: "Jefe de Enfermería", correo: "jefe.enfermeria@ejemplo.com" }
+    cc: []
+
+  - nombre: Fisioterapeutas
+    departamento_hik: Fisioterapeutas
+    activo: true
+    jefe: { nombre: "Jefe de Fisioterapia", correo: "jefe.fisioterapia@ejemplo.com" }
+    cc: ["coordinacion@ejemplo.com"]
+
+  - nombre: Médicos
+    departamento_hik: Medicos
+    activo: true
+    jefe: { nombre: "Director Médico", correo: "direccion.medica@ejemplo.com" }
+    cc: []
+
+  - nombre: Secretarias
+    departamento_hik: Secretarias
+    activo: true
+    jefe: { nombre: "Coordinación Administrativa", correo: "administracion@ejemplo.com" }
+    cc: []
+
+  - nombre: Personal de Apoyo
+    departamento_hik: Personal de Apoyo
+    activo: false        # vacío: excluido
+
+  - nombre: TI
+    departamento_hik: TI
+    activo: false        # pendiente de confirmar con el cliente

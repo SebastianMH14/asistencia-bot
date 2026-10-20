@@ -1,0 +1,18 @@
+Reportes de asistencia: {{ estado_general }}
+Semana del {{ desde }} al {{ hasta }} · modo {{ modo }} · código de salida {{ codigo }}
+{% if error_fatal %}
+ERROR FATAL: {{ error_fatal }}
+{% endif %}
+{% for r in resultados %}
+- {{ r.grupo }}: {{ r.estado }} · filas Excel {{ r.filas }} · consulta {{ r.consulta }} · intentos {{ r.intentos }} · {{ r.duracion }}
+  destinatarios: {{ r.destinatarios }}
+  archivo: {{ r.archivo }}
+{% if r.error %}  error: {{ r.error }}
+{% endif %}{% for a in r.advertencias %}  advertencia: {{ a }}
+{% endfor %}{% else %}
+No se procesó ningún grupo.
+{% endfor %}
+{% if hay_adjuntos %}
+Se adjuntan capturas o traces de los fallos. Pueden contener datos personales: no los reenvíe.
+{% endif %}
+Ejecución {{ id }} · inicio {{ inicio }} · duración {{ duracion }} · versión {{ version }} · equipo {{ equipo }}

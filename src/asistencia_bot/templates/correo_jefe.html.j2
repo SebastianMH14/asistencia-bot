@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es">
+<body style="font-family: Segoe UI, Arial, sans-serif; font-size: 14px; color: #222; line-height: 1.45;">
+  <p>Buen día.</p>
+  <p>
+    Adjunto el reporte <strong>Registros de entradas y salidas</strong> del grupo
+    <strong>{{ grupo }}</strong> de la semana del <strong>{{ desde }}</strong> al
+    <strong>{{ hasta }}</strong>, tal como lo genera HikCentral.
+  </p>
+  <p>Cómo leerlo:</p>
+  <ul>
+    <li>Un <code>-</code> o <code>--</code> en la columna <em>Salida a</em> significa que la persona no marcó salida.</li>
+    <li>Si la hora de entrada y la de salida son iguales, hubo una sola marcación (por ejemplo, la persona se quedó cerca del lector).</li>
+    <li>En esos dos casos la <em>Duración</em> aparece como <code>00:00</code>.</li>
+    <li>El reporte muestra la primera entrada y la última salida de cada día.</li>
+  </ul>
+  <p style="color: #666; font-size: 12px;">
+    Correo automático del bot de reportes de asistencia. Si nota algo extraño en el reporte,
+    responda a este correo.
+  </p>
+</body>
+</html>
