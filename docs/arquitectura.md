@@ -1,6 +1,6 @@
 # Arquitectura — asistencia-bot
 
-> **Estado:** borrador vivo. La Fase 0 (reconocimiento) terminó y la Fase 1 (prueba de concepto) está en curso.
+> **Estado:** Fases 0–2 terminadas (reconocimiento, prueba de concepto y construcción). Fase 3 (pruebas de integración) pendiente.
 > Lo marcado **[F1]** depende de la prueba de concepto y se cierra con un ADR en `docs/adr/`.
 > Lo marcado **[Cliente]** depende de datos que debe entregar el cliente.
 > Los hallazgos del equipo están en [`DISCOVERY.md`](../DISCOVERY.md).
@@ -135,9 +135,9 @@ Todo vive en `domain/`. Son `dataclass(frozen=True, slots=True)` y enums, sin ef
 |---|---|---|
 | `Periodo` | `desde: date`, `hasta: date` | Invariantes: `desde` es lunes y `hasta = desde + 6 días`. Expone `etiqueta()` → `"2026-10-12_2026-10-18"`, `texto_asunto()` → `"12/10 al 18/10/2026"` y `desde_texto_hik("2026-10-12 - 2026-10-18")`. |
 | `Grupo` | `nombre`, `departamento_hik`, `activo`, `correo_jefe`, `nombre_jefe`, `cc: tuple[str, ...]` | `nombre` es el que se muestra (asunto, archivo). `departamento_hik` es el nodo del árbol en HikCentral (p. ej. `Fisioterapeutas`). |
-| `ReporteExportado` | `grupo`, `periodo_solicitado`, `ruta_origen: Path`, `tamano_bytes`, `detectado_en` | Archivo recién capturado en `Downloadcenter`; todavía sin validar. |
+| `ReporteExportado` | `grupo`, `ruta: Path`, `tamano_bytes`, `consulta: ConsultaInterfaz \| None` | Archivo recién capturado en `Downloadcenter`, con lo que mostró la consulta de la interfaz; todavía sin validar. |
 | `MetadatosReporte` | `titulo`, `periodo_texto`, `encabezados: tuple[str, ...]`, `departamentos: frozenset[str]`, `filas: int`, `claves: frozenset[tuple[str, date]]` | Lo que el adaptador de Excel extrae. `claves` = (ID de empleado, fecha) **solo en memoria** para la regla de ADR-0005: nunca se registra, persiste ni envía, y `__repr__` la oculta. Sin nombres. |
-| `ConsultaInterfaz` | `paginas: int`, `registros: int`, `una_pagina: bool`, `claves: frozenset[tuple[str, date]]` | Lo que el extractor vio al recorrer la consulta de la tabla. Las mismas restricciones sobre `claves`. |
+| `ConsultaInterfaz` | `paginas: int`, `registros: int`, `periodo_consultado: Periodo`, `claves: frozenset[tuple[str, date]]` (y la propiedad `una_pagina`) | Lo que el extractor vio al recorrer la consulta de la tabla. Las mismas restricciones sobre `claves`. Si `periodo_consultado` no es el esperado, el grupo falla sin reintentos (`ErrorPeriodoNoCoincide`). |
 | `ArchivoArchivado` | `ruta: Path`, `sha256: str`, `tamano_bytes` | Copia en `salida/`. |
 | `Modo` (enum) | `PRODUCCION`, `PRUEBA`, `DRY_RUN` | |
 | `EstadoGrupo` (enum) | `ENVIADO`, `VALIDADO_SIN_ENVIO`, `OMITIDO_SIN_REGISTROS`, `OMITIDO_YA_ENVIADO`, `FALLIDO` | `ENVIADO` incluye el envío en modo prueba (el modo queda en `Ejecucion`). |
@@ -180,24 +180,25 @@ Son funciones puras que reciben `MetadatosReporte`, el `Periodo` esperado y el `
 
 ## 7. Puertos
 
-Viven en `ports.py` como `typing.Protocol`. Las firmas son la propuesta para la Fase 2; `AlmacenCredenciales` ya existe.
+Viven en [`src/asistencia_bot/ports.py`](../src/asistencia_bot/ports.py) como `typing.Protocol`. Este es el resumen de lo implementado en la Fase 2:
 
 ```python
 class Reloj(Protocol):
     def ahora(self) -> datetime: ...                      # aware, America/Bogota
 
-class AlmacenCredenciales(Protocol):                       # ya implementado
+class AlmacenCredenciales(Protocol):
     def obtener(self, sistema: str, usuario: str) -> str | None: ...
     def guardar(self, sistema: str, usuario: str, secreto: str) -> None: ...
     def borrar(self, sistema: str, usuario: str) -> bool: ...
 
+class VerificadorEntorno(Protocol):
+    def problemas(self) -> list[str]: ...                 # HikCentral, HCWebControl, carpeta, claves
+
 class ExtractorAsistencia(Protocol):
-    """Una sesión de HikCentral; se usa como context manager (abre y cierra el navegador)."""
-    def __enter__(self) -> "ExtractorAsistencia": ...
-    def __exit__(self, *exc: object) -> None: ...
-    def exportar(self, grupo: Grupo, periodo: Periodo) -> ReporteExportado: ...
-    def ultima_consulta(self) -> ConsultaInterfaz | None: ...  # páginas recorridas (R6, ADR-0005)
-    def guardar_evidencia(self, etiqueta: str) -> list[Path]: ...  # captura y trace ante un error
+    def abrir(self) -> None: ...                          # navegador + login (ErrorLogin/ErrorEntorno)
+    def exportar(self, grupo: Grupo, periodo: Periodo) -> ReporteExportado: ...  # incluye la consulta
+    def guardar_evidencia(self, etiqueta: str) -> tuple[Path, ...]: ...  # captura + trace del fallo
+    def cerrar(self) -> None: ...                         # cierra sesión y navegador; no lanza
 
 class InspectorReporte(Protocol):
     def leer_metadatos(self, ruta: Path) -> MetadatosReporte: ...
@@ -207,17 +208,19 @@ class Archivador(Protocol):
     def limpiar(self, ahora: datetime) -> int: ...          # solo archivos creados por el bot
 
 class Notificador(Protocol):
-    def enviar(self, correo: Correo) -> None: ...          # Correo: para, cc, asunto, html, texto, adjuntos
+    def enviar(self, correo: Correo) -> None: ...          # ErrorNotificacion tras reintentos
 
 class RenderizadorCorreos(Protocol):
-    def correo_jefe(self, grupo: Grupo, periodo: Periodo, adjunto: ArchivoArchivado) -> Correo: ...
-    def correo_resumen(self, ejecucion: Ejecucion, adjuntos: list[Path]) -> Correo: ...
+    def correo_jefe(self, grupo, periodo, archivo: ArchivoArchivado, nombre_adjunto: str) -> Correo: ...
+    def correo_sin_registros(self, grupo, periodo) -> Correo: ...
+    def correo_resumen(self, ejecucion: Ejecucion, para: str, adjuntos: Sequence[Path]) -> Correo: ...
+    def redirigir_a_prueba(self, correo: Correo, administrador: str) -> Correo: ...  # [PRUEBA]
 
 class RepositorioEstado(Protocol):
     def iniciar_ejecucion(self, ejecucion: Ejecucion) -> None: ...
-    def registrar_resultado(self, ejecucion_id: str, resultado: ResultadoGrupo) -> None: ...
+    def registrar_resultado(self, ejecucion: Ejecucion, resultado: ResultadoGrupo) -> None: ...
     def finalizar_ejecucion(self, ejecucion: Ejecucion) -> None: ...
-    def ya_enviado(self, periodo: Periodo, grupo: str) -> bool: ...  # solo cuentan envíos de producción
+    def ya_enviado(self, periodo: Periodo, grupo: str) -> bool: ...  # solo envíos de producción
     def ultimas_ejecuciones(self, n: int) -> list[Ejecucion]: ...
 ```
 
@@ -225,17 +228,16 @@ class RepositorioEstado(Protocol):
 
 | Adaptador | Implementa | Tecnología | Estado |
 |---|---|---|---|
-| `adapters/credenciales_keyring.py` | `AlmacenCredenciales` | `keyring` → `WinVaultKeyring` | **Existe** |
-| `adapters/hikcentral/*` | `ExtractorAsistencia` | Playwright síncrono | F2 (selectores en F1) |
-| `adapters/descargas.py` | (lo usa el extractor) | `pathlib`, sondeo | F2 (estrategia en F1) |
-| `adapters/excel_validador.py` | `InspectorReporte` | `openpyxl` solo lectura | F2 |
-| `adapters/archivador.py` | `Archivador` | `shutil`, `hashlib` | F2 |
-| `adapters/correo_smtp.py` | `Notificador` | `smtplib` + `EmailMessage` + `tenacity` | F2 |
-| `adapters/plantillas.py` | `RenderizadorCorreos` | `jinja2` | F2 |
-| `adapters/estado_sqlite.py` | `RepositorioEstado` | `sqlite3` | F2 |
-| `adapters/reloj.py` | `Reloj` | `zoneinfo` + `tzdata` | F2 |
-| `adapters/candado.py` | (lo usa `cli`/`bootstrap`) | `msvcrt.locking` sobre `ejecucion.lock` | F2 |
-
+| `adapters/credenciales_keyring.py` | `AlmacenCredenciales` | `keyring` → `WinVaultKeyring` | Existe |
+| `adapters/hikcentral/*` | `ExtractorAsistencia` | Playwright síncrono | Existe |
+| `adapters/descargas.py` | (lo usa el extractor) | `pathlib`, sondeo | Existe |
+| `adapters/excel_validador.py` | `InspectorReporte` | `openpyxl` solo lectura | Existe |
+| `adapters/archivador.py` | `Archivador` | `shutil`, `hashlib` | Existe |
+| `adapters/correo_smtp.py` | `Notificador` | `smtplib` + `EmailMessage` + `tenacity` | Existe |
+| `adapters/plantillas.py` | `RenderizadorCorreos` | `jinja2` | Existe |
+| `adapters/estado_sqlite.py` | `RepositorioEstado` | `sqlite3` | Existe |
+| `adapters/reloj.py` | `Reloj` | `zoneinfo` + `tzdata` | Existe |
+| `adapters/candado.py` | (lo usa `cli`/`bootstrap`) | `msvcrt.locking` sobre `ejecucion.lock` | Existe |
 ### 8.1 Extractor de HikCentral (`adapters/hikcentral/`)
 
 - **`selectores.py`**: es el **único** lugar con selectores.
@@ -356,7 +358,8 @@ cli.ejecutar(modo, grupo?, forzar, visible)
  │        si no      → notificador.enviar(correo_jefe, destinatarios según el modo) → ENVIADO
  │        registrar_resultado(...)               (siempre, también si falla)
  │        si error final → guardar_evidencia() y FALLIDO; **continuar con el siguiente grupo**
- ├─ enviar correo de resumen al administrador (también en dry-run), con capturas y traces si hubo fallos
+ ├─ enviar correo de resumen al administrador, con capturas y traces si hubo fallos (máx. 15 MB)
+ │  (en dry-run no se envía nada: la CLI imprime el resumen en la consola)
  ├─ archivador.limpiar() según la retención
  └─ código de salida = ejecucion.codigo_salida
 ```
@@ -371,6 +374,8 @@ cli.ejecutar(modo, grupo?, forzar, visible)
 | Sesión expirada a mitad de la ejecución | Recuperable | **Un** relogin | Continúa |
 | Selector no encontrado, timeout de UI o el archivo no aparece | Del grupo | Sí, con `tenacity` (por defecto 3 intentos y espera exponencial de 30 a 120 s) | `FALLIDO` si se agotan los intentos |
 | Periodo, departamentos o encabezados no coinciden | Del grupo | No: es determinista, reintentar no lo arregla | `FALLIDO`, no se envía |
+| La consulta de la interfaz cubre otro rango (`ErrorPeriodoNoCoincide`) | Del grupo (`ErrorNoReintentable`) | No | `FALLIDO` antes de exportar |
+| Error inesperado (bug) | Fatal | No | Alerta "error inesperado: <tipo>" al administrador; código **2** |
 | Grupo sin registros | Política | — | `omitir_y_reportar` (por defecto): `OMITIDO_SIN_REGISTROS`. `enviar_aviso_sin_registros`: correo al jefe sin adjunto. |
 | Error SMTP transitorio | Del grupo | Sí, dentro del adaptador | `FALLIDO` si se agotan los intentos |
 
@@ -486,14 +491,15 @@ Todo cuelga de `rutas.base`.
 | `credenciales configurar <hikcentral\|smtp> -u USUARIO` | Pide la contraseña con `getpass` y la guarda en `keyring` | **Existe** |
 | `credenciales comprobar <sistema> -u USUARIO` | Dice si existe, sin mostrarla | **Existe** |
 | `credenciales borrar <sistema> -u USUARIO` | La elimina | **Existe** |
-| `ejecutar` | Producción (envía a los jefes) | F2 |
-| `ejecutar --modo prueba` | Todos los correos van solo al administrador | F2 |
-| `ejecutar --dry-run` | Exporta y valida, pero no envía a los jefes; sí envía el resumen al administrador | F2 |
-| `ejecutar --grupo "Fisioterapeutas"` | Solo ese grupo | F2 |
-| `ejecutar --forzar` | Ignora la idempotencia | F2 |
-| `ejecutar --visible` | Navegador visible para depurar | F2 |
-| `verificar` | Revisa configuración, credenciales, SMTP (conexión y login), que HikCentral responda y que HCWebControl esté vivo. **No exporta.** | F2 |
-| `estado [-n 10]` | Últimas ejecuciones y resultados por grupo | F2 |
+| `ejecutar` | Modo por defecto de la configuración (`prueba` hasta que se apruebe producción) | **Existe** |
+| `ejecutar --modo produccion` | Envía a los jefes; exige `produccion_habilitada = true` y jefes en todos los grupos activos | **Existe** |
+| `ejecutar --modo prueba` | Todos los correos van solo al administrador, marcados `[PRUEBA]` | **Existe** |
+| `ejecutar --dry-run` | Exporta, valida y archiva; **no envía ningún correo** (ni el resumen, que se imprime en consola). No requiere SMTP. | **Existe** |
+| `ejecutar --grupo "Fisioterapeutas"` | Solo ese grupo (repetible) | **Existe** |
+| `ejecutar --forzar` | Ignora la idempotencia | **Existe** |
+| `ejecutar --visible` | Navegador visible para depurar | **Existe** |
+| `verificar` | Revisa configuración, credenciales, SMTP (conexión y login), que HikCentral responda, que HCWebControl escuche y que la carpeta sea escribible. **No exporta.** Código 0 o 2. | **Existe** |
+| `estado [-n 10]` | Últimas ejecuciones y resultados por grupo | **Existe** |
 
 Mientras el cliente no apruebe explícitamente la producción, `ejecutar` sin `--modo` usa el `modo_por_defecto` de la configuración, que es `prueba`.
 
@@ -564,30 +570,25 @@ Metas:
 
 ```
 asistencia-bot/
-├─ CLAUDE.md                     guía para sesiones de Claude Code               existe
-├─ DISCOVERY.md                  hallazgos de las Fases 0 y 1                     existe
-├─ pyproject.toml / uv.lock      dependencias (uv, Python 3.13)                  existe
-├─ README.md                     instalación y uso                               F2
-├─ docs/
-│  ├─ arquitectura.md            este documento                                  existe
-│  ├─ runbook.md                 operación                                       F2/F4
-│  ├─ guia-cliente.md            una página: grupos y destinatarios              F4
-│  └─ adr/                       decisiones                                      0001 existe
-├─ config/                       *.example.toml / *.example.yaml                 F2
-├─ exploracion/                  scripts de la Fase 1 (no es código de producción)
-├─ scripts/registrar_tarea.ps1                                                    F4
+├─ CLAUDE.md, DISCOVERY.md, README.md
+├─ pyproject.toml / uv.lock          dependencias (uv, Python 3.13)
+├─ config/                           settings.example.toml, grupos.example.yaml (los reales no se versionan)
+├─ docs/                             arquitectura.md, runbook.md, guia-cliente.md, adr/0001–0005
+├─ exploracion/                      herramientas de la Fase 1 (no es código de producción)
+├─ scripts/registrar_tarea.ps1       Fase 4
 ├─ src/asistencia_bot/
-│  ├─ __init__.py, __main__.py                                                    existe
-│  ├─ cli.py                     credenciales: existe · ejecutar/verificar/estado: F2
-│  ├─ bootstrap.py                                                                existe (parcial)
-│  ├─ ports.py                   AlmacenCredenciales: existe · resto: F2
-│  ├─ config.py, logging_config.py                                                F2
-│  ├─ domain/                    modelos.py, periodo.py, validacion.py           F2
-│  ├─ services/                  ejecutar_reporte_semanal.py                     F2
-│  ├─ adapters/                  credenciales_keyring.py: existe · resto: F2
-│  └─ templates/                 correo_jefe.html.j2, correo_resumen.html.j2     F2
+│  ├─ __main__.py, cli.py            ejecutar · verificar · estado · credenciales
+│  ├─ bootstrap.py                   composition root
+│  ├─ config.py, logging_config.py
+│  ├─ ports.py
+│  ├─ domain/                        modelos, errores, periodo, validacion
+│  ├─ services/                      ejecutar_reporte_semanal.py
+│  ├─ adapters/                      hikcentral/{selectores,paginas,sesion,extractor_ui}.py, descargas,
+│  │                                 excel_validador, archivador, estado_sqlite, correo_smtp, plantillas,
+│  │                                 entorno, candado, reloj, logs, credenciales_keyring
+│  └─ templates/                     correo_jefe, correo_sin_registros, correo_resumen (.html.j2/.txt.j2)
 └─ tests/
-   ├─ unit/                                                                       existe (credenciales)
-   ├─ integration/               @pytest.mark.hikcentral                          F3
-   └─ fixtures/                  generador de Excel sintético                    F2
+   ├─ unit/                          115 pruebas con fakes y Excel sintéticos (sin recursos reales)
+   ├─ integration/                   @pytest.mark.hikcentral (Fase 3)
+   └─ fixtures/                      generador de Excel sintético
 ```

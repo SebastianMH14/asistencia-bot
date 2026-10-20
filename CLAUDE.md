@@ -12,8 +12,8 @@ Bot en Python que **cada lunes** exporta de HikCentral Access Control el reporte
 |---|---|
 | 0. Reconocimiento del equipo | Terminada (`DISCOVERY.md`) |
 | 1. Prueba de concepto (login, exportar Fisioterapeutas, capturar el archivo, validar) | **Terminada (2026-10-20), pendiente del visto bueno.** La PoC funciona en modo visible y headless, con captura por carpeta, cierre de sesión y sin cerrar otras sesiones. Más de 100 filas: el Excel está completo y la paginación de la interfaz está rota (ADR-0005). ADRs 0001–0005. |
-| 2. Construcción | Pendiente |
-| 3. Pruebas (unitarias e integración en modo prueba) | Pendiente |
+| 2. Construcción | **Terminada (2026-10-20).**<br>- Código completo según `docs/arquitectura.md`.<br>- 115 pruebas unitarias.<br>- ruff y `mypy --strict` en verde.<br>- Cobertura: dominio 100 %, servicios 95 %. |
+| 3. Pruebas (integración: `--dry-run` de todos los grupos, luego `--modo prueba`) | Pendiente.<br>- La integración contra HikCentral la lanza el usuario.<br>- `--modo prueba` requiere los datos SMTP y del administrador. |
 | 4. Tarea programada y puesta en producción | Pendiente |
 
 **Regla de avance:** no se pasa a la fase siguiente sin mostrarle los hallazgos al usuario y recibir su visto bueno. Cada fase termina con un commit.
@@ -40,7 +40,9 @@ Bot en Python que **cada lunes** exporta de HikCentral Access Control el reporte
 7. **Sesiones:** el usuario `admin` puede tener una sesión abierta por una persona. Hay que verificar si el login del bot la cierra; si es así, se recomienda un usuario dedicado.
 8. **Git:**
    - Un commit por fase como mínimo, con mensajes claros en español.
-   - **No hay remoto:** no hacer push ni crear uno sin que el usuario lo pida.
+   - El remoto es `origin` = `https://github.com/SebastianMH14/asistencia-bot`.
+   - **Solo hacer push cuando el usuario lo pida.** Se hace desde la terminal del usuario, porque GitHub puede pedir autenticación y esa la hace él.
+   - Nunca hacer push forzado.
 
 ## Comandos
 
@@ -58,11 +60,18 @@ uv run --frozen ruff format              # formato (usar --check para verificar)
 uv run --frozen mypy                     # mypy --strict sobre src/
 uv run --frozen asistencia-bot --help
 uv run --frozen asistencia-bot credenciales comprobar hikcentral -u admin   # no muestra la contraseña
+uv run --frozen asistencia-bot verificar          # sin exportar: config, claves, SMTP, HikCentral, HCWebControl
+uv run --frozen asistencia-bot estado             # últimas ejecuciones (estado.db)
+# ejecutar (--dry-run / --modo prueba / --modo produccion) inicia sesión en HikCentral: lo lanza el USUARIO
 uv add <paquete> / uv add --dev <paquete>   # dependencias: siempre con uv, nunca pip directo
 ```
 
 - PowerShell 5.1 no tiene `&&`, `||` ni `?:`. Se encadena con `;` o con `if ($?) { ... }`.
 - `.venv\Scripts\asistencia-bot.exe` funciona sin `uv` en el PATH. Es lo que usará la tarea programada.
+- **Si el ejecutable está en uso** (por ejemplo, un `credenciales configurar` esperando en una terminal), `uv run` sin `--no-sync` falla al reinstalar el proyecto. En ese caso se usa `uv run --no-sync`.
+- **Configuración real del equipo:** `config/settings.toml` y `config/grupos.yaml`, ignorados por git.
+  - Hoy no tienen `[smtp]`, `[administrador]` ni jefes, así que solo sirve `--dry-run`.
+  - `modo_por_defecto = "prueba"` y `produccion_habilitada = false` se mantienen así hasta la aprobación explícita del cliente.
 
 ## Trampas de este equipo (leer antes de instalar o ejecutar)
 
