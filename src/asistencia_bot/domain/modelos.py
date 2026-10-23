@@ -95,6 +95,13 @@ ClaveRegistro = tuple[str, date]
 """(ID de empleado, fecha). Dato personal: solo en memoria, nunca en logs ni en disco."""
 
 
+def nombre_entregable(grupo: Grupo, periodo: Periodo) -> str:
+    """``Asistencia_<Grupo>_<desde>_al_<hasta>.xlsx``: nombre del adjunto y base del histórico."""
+    return (
+        f"Asistencia_{grupo.slug}_{periodo.desde.isoformat()}_al_{periodo.hasta.isoformat()}.xlsx"
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ConsultaInterfaz:
     """Lo que el extractor vio al recorrer la consulta paginada de la tabla."""

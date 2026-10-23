@@ -24,7 +24,6 @@ from asistencia_bot.domain.errores import (
     ErrorNotificacion,
 )
 from asistencia_bot.domain.modelos import (
-    ArchivoArchivado,
     Correo,
     Ejecucion,
     EstadoGrupo,
@@ -34,6 +33,7 @@ from asistencia_bot.domain.modelos import (
     PoliticaSinRegistros,
     ReporteExportado,
     ResultadoGrupo,
+    nombre_entregable,
 )
 from asistencia_bot.domain.periodo import semana_anterior
 from asistencia_bot.domain.validacion import validar_reporte
@@ -298,7 +298,7 @@ class EjecutarReporteSemanal:
             self._renderizador.correo_sin_registros(grupo, ejecucion.periodo)
             if meta.filas == 0
             else self._renderizador.correo_jefe(
-                grupo, ejecucion.periodo, archivo, self._nombre_adjunto(archivo)
+                grupo, ejecucion.periodo, archivo, nombre_entregable(grupo, ejecucion.periodo)
             )
         )
         try:
@@ -306,10 +306,6 @@ class EjecutarReporteSemanal:
         except ErrorNotificacion as e:
             return resultado(EstadoGrupo.FALLIDO, error=f"no se envió: {e}", **comunes)
         return resultado(EstadoGrupo.ENVIADO, destinatarios=destinatarios, **comunes)
-
-    @staticmethod
-    def _nombre_adjunto(archivo: ArchivoArchivado) -> str:
-        return archivo.ruta.name
 
     def _enviar(self, correo: Correo, modo: Modo) -> tuple[str, ...]:
         if self._notificador is None:

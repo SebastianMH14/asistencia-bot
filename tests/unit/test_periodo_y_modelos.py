@@ -88,3 +88,13 @@ def test_duracion() -> None:
 def test_modo_envia_correos() -> None:
     assert Modo.PRODUCCION.envia_correos and Modo.PRUEBA.envia_correos
     assert not Modo.DRY_RUN.envia_correos
+
+
+def test_nombre_entregable() -> None:
+    from asistencia_bot.domain.modelos import nombre_entregable
+
+    grupo = Grupo("Aux. Enfermería", "Aux. Enfermería")
+
+    assert nombre_entregable(grupo, SEMANA) == (
+        "Asistencia_Aux_Enfermeria_2026-10-12_al_2026-10-18.xlsx"
+    )

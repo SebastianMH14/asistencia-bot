@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from asistencia_bot.domain.errores import ErrorArchivo
-from asistencia_bot.domain.modelos import ArchivoArchivado, Grupo, Periodo
+from asistencia_bot.domain.modelos import ArchivoArchivado, Grupo, Periodo, nombre_entregable
 
 
 def sha256_de(ruta: Path) -> str:
@@ -35,12 +35,9 @@ class ArchivadorLocal:
         self._salida = salida
         self._reglas = reglas
 
-    def nombre_archivo(self, periodo: Periodo, grupo: Grupo) -> str:
-        return f"Asistencia_{grupo.slug}_{periodo.desde.isoformat()}_al_{periodo.hasta.isoformat()}"
-
     def archivar(self, origen: Path, periodo: Periodo, grupo: Grupo) -> ArchivoArchivado:
         carpeta = self._salida / periodo.etiqueta()
-        base = self.nombre_archivo(periodo, grupo)
+        base = nombre_entregable(grupo, periodo).removesuffix(".xlsx")
         try:
             carpeta.mkdir(parents=True, exist_ok=True)
             sha_origen = sha256_de(origen)

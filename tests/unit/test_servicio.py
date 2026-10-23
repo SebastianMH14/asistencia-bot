@@ -145,9 +145,13 @@ class Notificador:
 
 
 class Renderizador:
+    def __init__(self) -> None:
+        self.adjuntos: list[str] = []
+
     def correo_jefe(
         self, grupo: Grupo, periodo: Periodo, archivo: ArchivoArchivado, nombre_adjunto: str
     ) -> Correo:
+        self.adjuntos.append(nombre_adjunto)
         para = (grupo.jefe.correo,) if grupo.jefe else ()
         return Correo(para, f"Reporte {grupo.nombre}", "t", "h", cc=grupo.cc)
 
@@ -199,6 +203,7 @@ class Escenario:
         self.archivador = Archivador(self.tmp)
         self.notificador = Notificador()
         self.estado = Estado()
+        self.renderizador = Renderizador()
 
     def ejecutar(self, modo: Modo, **opciones: object) -> Ejecucion:
         servicio = EjecutarReporteSemanal(
@@ -208,7 +213,7 @@ class Escenario:
             inspector=self.inspector,
             archivador=self.archivador,
             notificador=self.notificador if self.con_notificador else None,
-            renderizador=Renderizador(),
+            renderizador=self.renderizador,
             estado=self.estado,
             grupos=self.grupos,
             administrador=ADMIN,
@@ -447,3 +452,13 @@ def test_grupo_desconocido_es_fatal(esc: Escenario) -> None:
     e = esc.ejecutar(Modo.DRY_RUN, solo_grupos=("TI",))  # inactivo
 
     assert e.codigo_salida == 2 and "TI" in (e.error_fatal or "")
+
+
+def test_adjunto_con_nombre_limpio_aunque_el_historico_tenga_version(esc: Escenario) -> None:
+    """El histórico puede guardar _v2 (reenvíos), pero el jefe siempre recibe el nombre acordado."""
+    esc.ejecutar(Modo.PRUEBA)
+
+    assert esc.renderizador.adjuntos == [
+        "Asistencia_Fisioterapeutas_2026-10-12_al_2026-10-18.xlsx",
+        "Asistencia_Medicos_2026-10-12_al_2026-10-18.xlsx",
+    ]
