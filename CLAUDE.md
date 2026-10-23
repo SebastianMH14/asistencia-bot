@@ -75,7 +75,8 @@ uv add <paquete> / uv add --dev <paquete>   # dependencias: siempre con uv, nunc
 - `.venv\Scripts\asistencia-bot.exe` funciona sin `uv` en el PATH. Es lo que usará la tarea programada.
 - **Si el ejecutable está en uso** (por ejemplo, un `credenciales configurar` esperando en una terminal), `uv run` sin `--no-sync` falla al reinstalar el proyecto. En ese caso se usa `uv run --no-sync`.
 - **Configuración real del equipo:** `config/settings.toml` y `config/grupos.yaml`, ignorados por git.
-  - Hoy no tienen `[smtp]`, `[administrador]` ni jefes, así que solo sirve `--dry-run`.
+  - Desde el 2026-10-23 tienen `[smtp]` (Gmail), `[administrador]` (correo de pruebas del usuario) y jefes y copias de los 4 grupos activos, tomados del listado de áreas y líderes del cliente. TI y Personal de Apoyo están inactivos.
+  - El listado de áreas (`*.xlsx` en la raíz) tiene cédulas de empleados: está ignorado por git y **nunca** se imprime fila por fila; solo agregados.
   - `modo_por_defecto = "prueba"` y `produccion_habilitada = false` se mantienen así hasta la aprobación explícita del cliente.
 
 ## Trampas de este equipo (leer antes de instalar o ejecutar)
@@ -203,9 +204,9 @@ Es un hexágono ligero con inyección manual en `bootstrap.py`. Detalle en `docs
 
 ## Pendiente de pedir al cliente (no inventar)
 
-1. ¿TI recibe reporte? (Personal de Apoyo queda excluido.)
-2. Nombre y correo del jefe de cada grupo, y los correos en copia.
-3. Correo del administrador para resúmenes y alertas.
-4. Cuenta remitente: proveedor (Gmail o Microsoft 365), host, puerto y usuario. La contraseña la guarda el usuario con `credenciales configurar smtp`.
+1. ~~¿TI recibe reporte?~~ No (2026-10-23).
+2. ~~Jefe y copias de cada grupo~~ Definidos el 2026-10-23 (`config/grupos.yaml`).
+3. Correo **definitivo** del administrador (hoy es el correo de pruebas del usuario).
+4. ~~Cuenta remitente~~ Gmail configurado; la contraseña de aplicación está en keyring.
 5. Hora del envío del lunes (propuesta: 07:00).
 6. ¿Usuario de HikCentral dedicado al bot o `admin`?
