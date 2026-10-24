@@ -11,10 +11,10 @@ Bot en Python que **cada lunes** exporta de HikCentral Access Control el reporte
 | Fase | Estado |
 |---|---|
 | 0. Reconocimiento del equipo | Terminada (`DISCOVERY.md`) |
-| 1. Prueba de concepto (login, exportar Fisioterapeutas, capturar el archivo, validar) | **Terminada (2026-10-20), pendiente del visto bueno.** La PoC funciona en modo visible y headless, con captura por carpeta, cierre de sesión y sin cerrar otras sesiones. Más de 100 filas: el Excel está completo y la paginación de la interfaz está rota (ADR-0005). ADRs 0001–0005. |
+| 1. Prueba de concepto (login, exportar Fisioterapeutas, capturar el archivo, validar) | **Terminada y aprobada (2026-10-20).** La PoC funciona en modo visible y headless, con captura por carpeta, cierre de sesión y sin cerrar otras sesiones. Más de 100 filas: el Excel está completo y la paginación de la interfaz está rota (ADR-0005). ADRs 0001–0005. |
 | 2. Construcción | **Terminada (2026-10-20).**<br>- Código completo según `docs/arquitectura.md`.<br>- 115 pruebas unitarias.<br>- ruff y `mypy --strict` en verde.<br>- Cobertura: dominio 100 %, servicios 95 %. |
-| 3. Pruebas (integración: `--dry-run` de todos los grupos, luego `--modo prueba`) | **En curso.**<br>- `--dry-run` OK el 2026-10-20: 4 grupos validados (22/65/73/75 filas, una página cada uno), código 0, 79 s.<br>- Corregido antes: `recargar()` usaba `goto('#/')`, que solo cambia el hash; ahora usa `page.reload()`.<br>- `--modo prueba` OK el 2026-10-23: `verificar` todo OK; 4 grupos enviados (22/65/73/75), código 0, 88 s. Las muestras fueron al responsable de aprobación del cliente con un cambio puntual del administrador (`ASISTENCIA_BOT_ADMINISTRADOR__CORREO`, solo esa ejecución).<br>- Corregido después: el adjunto llevaba `_v2` cuando el histórico ya tenía otra copia; ahora siempre se llama `Asistencia_<Grupo>_<desde>_al_<hasta>.xlsx`.<br>- Pendiente: aprobación del cliente para pasar a producción. |
-| 4. Tarea programada y puesta en producción | Pendiente |
+| 3. Pruebas (integración: `--dry-run` de todos los grupos, luego `--modo prueba`) | **Terminada (2026-10-23).**<br>- `--dry-run` OK el 2026-10-20: 4 grupos validados (22/65/73/75 filas, una página cada uno), código 0, 79 s.<br>- Corregido antes: `recargar()` usaba `goto('#/')`, que solo cambia el hash; ahora usa `page.reload()`.<br>- `--modo prueba` OK el 2026-10-23: `verificar` todo OK; 4 grupos enviados (22/65/73/75), código 0, 88 s. Las muestras fueron al responsable de aprobación del cliente con un cambio puntual del administrador (`ASISTENCIA_BOT_ADMINISTRADOR__CORREO`, solo esa ejecución).<br>- Corregido después: el adjunto llevaba `_v2` cuando el histórico ya tenía otra copia; ahora siempre se llama `Asistencia_<Grupo>_<desde>_al_<hasta>.xlsx`.<br>- El cliente aprobó la producción el 2026-10-23. |
+| 4. Tarea programada y puesta en producción | **En curso (2026-10-23).**<br>- Producción activada en `config/settings.toml` (`modo_por_defecto = "produccion"`, `produccion_habilitada = true`), con el administrador definitivo.<br>- Tareas registradas con `scripts/registrar_tarea.ps1`: *asistencia-bot - reporte semanal* (lunes 05:00) y *asistencia-bot - ensayo* (2026-10-24 05:00, modo prueba al correo de pruebas del usuario; se borra sola a los 7 días).<br>- Pendiente: revisar el ensayo (`logs\tarea.log`, `estado`) y acompañar la primera ejecución real, el lunes 2026-10-26 (semana del 19 al 25/10).<br>- Pendiente del usuario: inicio de sesión automático de Windows y horas activas de Windows Update (ver "Trampas"). |
 
 **Regla de avance:** no se pasa a la fase siguiente sin mostrarle los hallazgos al usuario y recibir su visto bueno. Cada fase termina con un commit.
 
@@ -28,7 +28,7 @@ Bot en Python que **cada lunes** exporta de HikCentral Access Control el reporte
 2. **HikCentral es de solo lectura:**
    - No cambiar usuarios, horarios, departamentos, ruta de descarga ni nada de configuración. Exportar sí está permitido.
    - Cualquier cambio (ubicación de descarga personalizada, usuario dedicado, OpenAPI) se propone y espera aprobación.
-3. **Correos:** hasta la aprobación explícita del usuario, **todo envío va solo al correo del administrador** (modo prueba). Nunca se envía a los jefes sin su visto bueno.
+3. **Correos:** la producción se aprobó el 2026-10-23. **Solo la tarea semanal** (o un `ejecutar` que lance el propio usuario) envía a los jefes. Toda prueba usa `--modo prueba` (solo al administrador, o a otro destinatario con `ASISTENCIA_BOT_ADMINISTRADOR__CORREO`) o `--dry-run`. Claude nunca provoca un envío a los jefes por su cuenta.
 4. **Archivos:**
    - No borrar ni mover nada en `Downloadcenter` ni en carpetas que no haya creado el bot o Claude. Los exportados se **copian** a `salida/`.
    - Nada de borrados permanentes de archivos ajenos.
@@ -68,16 +68,23 @@ uv run --frozen asistencia-bot credenciales comprobar hikcentral -u admin   # no
 uv run --frozen asistencia-bot verificar          # sin exportar: config, claves, SMTP, HikCentral, HCWebControl
 uv run --frozen asistencia-bot estado             # últimas ejecuciones (estado.db)
 # ejecutar (--dry-run / --modo prueba / --modo produccion) inicia sesión en HikCentral: lo lanza el USUARIO
+# OJO: desde el 2026-10-23, `ejecutar` sin --modo es PRODUCCIÓN (envía a los jefes)
 uv add <paquete> / uv add --dev <paquete>   # dependencias: siempre con uv, nunca pip directo
+
+# Tarea programada: se registra desde la terminal del USUARIO (no desde el shell de Claude, ADR-0001)
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\registrar_tarea.ps1 -WhatIf   # sin -WhatIf registra
+Get-ScheduledTask | Where-Object TaskName -like 'asistencia-bot*' | Get-ScheduledTaskInfo  # próxima y última ejecución
+Get-Content -Encoding UTF8 logs\tarea.log -Tail 20     # intentos de la tarea y sus códigos de salida
 ```
 
 - PowerShell 5.1 no tiene `&&`, `||` ni `?:`. Se encadena con `;` o con `if ($?) { ... }`.
-- `.venv\Scripts\asistencia-bot.exe` funciona sin `uv` en el PATH. Es lo que usará la tarea programada.
+- `.venv\Scripts\asistencia-bot.exe` funciona sin `uv` en el PATH. La tarea programada lo lanza a través de `scripts\ejecutar_tarea.ps1`, que espera a HikCentral y HCWebControl y reintenta una vez ante el código 2.
 - **Si el ejecutable está en uso** (por ejemplo, un `credenciales configurar` esperando en una terminal), `uv run` sin `--no-sync` falla al reinstalar el proyecto. En ese caso se usa `uv run --no-sync`.
 - **Configuración real del equipo:** `config/settings.toml` y `config/grupos.yaml`, ignorados por git.
-  - Desde el 2026-10-23 tienen `[smtp]` (Gmail), `[administrador]` (correo de pruebas del usuario) y jefes y copias de los 4 grupos activos, tomados del listado de áreas y líderes del cliente. TI y Personal de Apoyo están inactivos.
+  - Desde el 2026-10-23 tienen `[smtp]` (Gmail), `[administrador]` (el definitivo, responsable del cliente) y jefes y copias de los 4 grupos activos, tomados del listado de áreas y líderes del cliente. TI y Personal de Apoyo están inactivos.
   - El listado de áreas (`*.xlsx` en la raíz) tiene cédulas de empleados: está ignorado por git y **nunca** se imprime fila por fila; solo agregados.
-  - `modo_por_defecto = "prueba"` y `produccion_habilitada = false` se mantienen así hasta la aprobación explícita del cliente.
+  - Desde el 2026-10-23: `modo_por_defecto = "produccion"` y `produccion_habilitada = true` (aprobación del cliente). Para desactivar la producción: `produccion_habilitada = false` y `modo_por_defecto = "prueba"`, o deshabilitar la tarea.
+  - El lanzador `Probar bot asistencia.cmd` del Escritorio (no versionado) corre `--modo prueba` y manda todo al correo de pruebas del usuario, no al administrador.
 
 ## Trampas de este equipo (leer antes de instalar o ejecutar)
 
@@ -94,6 +101,10 @@ uv add <paquete> / uv add --dev <paquete>   # dependencias: siempre con uv, nunc
   - uv está en `C:\Users\<usuario>\AppData\Local\Microsoft\WinGet\Packages\astral-sh.uv_...\uv.exe` (instalado con winget; es real, no virtualizado).
   - git está en `C:\Program Files\Git`.
 - La zona horaria es `SA Pacific Standard Time`, equivalente a `America/Bogota`. La cultura es es-ES.
+- **La tarea programada solo corre con la sesión de `<usuario>` iniciada**, porque HCWebControl vive en esa sesión.
+  - Tras un reinicio (Windows Update, corte de luz) sin inicio de sesión automático, el lunes no corre hasta que alguien inicie sesión. Ahí corre sola ("lo antes posible si se omitió"), y nadie recibe aviso mientras tanto.
+  - Inicio de sesión automático y horas activas de Windows Update son configuración del sistema: los cambia el usuario, no Claude.
+- Los `.ps1` de `scripts/` se guardan en UTF-8 **con BOM**; sin BOM, PowerShell 5.1 los lee en ANSI y estropea las tildes.
 
 ## HikCentral: datos de referencia
 
@@ -206,7 +217,7 @@ Es un hexágono ligero con inyección manual en `bootstrap.py`. Detalle en `docs
 
 1. ~~¿TI recibe reporte?~~ No (2026-10-23).
 2. ~~Jefe y copias de cada grupo~~ Definidos el 2026-10-23 (`config/grupos.yaml`).
-3. Correo **definitivo** del administrador (hoy es el correo de pruebas del usuario).
+3. ~~Correo definitivo del administrador~~ Definido el 2026-10-23 (`config/settings.toml`).
 4. ~~Cuenta remitente~~ Gmail configurado; la contraseña de aplicación está en keyring.
-5. Hora del envío del lunes (propuesta: 07:00).
-6. ¿Usuario de HikCentral dedicado al bot o `admin`?
+5. ~~Hora del envío del lunes~~ 05:00 (2026-10-23).
+6. ~~¿Usuario de HikCentral dedicado al bot o `admin`?~~ Se sigue con `admin` (2026-10-23).

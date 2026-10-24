@@ -501,23 +501,35 @@ Todo cuelga de `rutas.base`.
 | `verificar` | Revisa configuración, credenciales, SMTP (conexión y login), que HikCentral responda, que HCWebControl escuche y que la carpeta sea escribible. **No exporta.** Código 0 o 2. | **Existe** |
 | `estado [-n 10]` | Últimas ejecuciones y resultados por grupo | **Existe** |
 
-Mientras el cliente no apruebe explícitamente la producción, `ejecutar` sin `--modo` usa el `modo_por_defecto` de la configuración, que es `prueba`.
+`ejecutar` sin `--modo` usa el `modo_por_defecto` de la configuración. Era `prueba` hasta la aprobación del cliente (2026-10-23); desde entonces es `produccion`, que es lo que corre la tarea semanal.
 
 ## 15. Programación y operación
 
-Se registra con `scripts/registrar_tarea.ps1`, que pide confirmación (Fase 4).
+`scripts/registrar_tarea.ps1` registra la tarea. Lo ejecuta el usuario desde su propia terminal (ADR-0001) y acepta `-WhatIf`. Volver a ejecutarlo reemplaza la tarea.
 
 | Ajuste | Valor |
 |---|---|
-| Disparador | Lunes a la hora configurada (propuesta: 07:00) **[Cliente]** |
+| Nombre | `asistencia-bot - reporte semanal` |
+| Disparador | Lunes a las 05:00 (`-Dia` y `-Hora` para cambiarlo) |
 | Usuario | `<usuario>`, el mismo que guardó las credenciales: el Administrador de credenciales es por usuario |
-| Seguridad | "Ejecutar solo cuando el usuario haya iniciado sesión" (R2). Se confirma en la **[F1]**; si headless funciona sin sesión, se reevalúa. |
+| Seguridad | "Ejecutar solo cuando el usuario haya iniciado sesión" (R2): HCWebControl solo vive en esa sesión. No guarda la contraseña de Windows ni pide elevación. |
 | Si se omitió | "Ejecutar la tarea lo antes posible si se omitió un inicio programado" |
-| Energía | Despertar el equipo; no detener si pasa a batería (es un escritorio) |
-| Reintentos | Reinicio ante fallo de la tarea (comportamiento con código ≠ 0 por verificar en la Fase 4). El bot ya reintenta por grupo internamente. |
-| Acción | `C:\Users\<usuario>\asistencia-bot\.venv\Scripts\asistencia-bot.exe ejecutar`, con "Iniciar en" = carpeta del proyecto |
+| Energía | Despertar el equipo; no detener si pasa a batería |
+| Límite | 2 horas; si ya hay una instancia corriendo, no se inicia otra |
+| Acción | `powershell.exe -File scripts\ejecutar_tarea.ps1`, oculta, con "Iniciar en" = carpeta del proyecto |
 
-La operación diaria (cambiar destinatarios, reenviar con `--forzar`, qué hacer ante cada código de salida) va en `docs/runbook.md` (Fase 2/4).
+`scripts/ejecutar_tarea.ps1` es lo que corre la tarea:
+
+1. Espera hasta 15 min a que respondan HikCentral y HCWebControl. Cubre el caso en que la tarea arranca justo al iniciar sesión tras un reinicio. Si no responden, ejecuta igual para que el bot avise al administrador.
+2. Ejecuta `asistencia-bot ejecutar` y guarda su salida en `logs\tarea\<fecha>.txt`.
+3. Con código **2** (fatal), reintenta una vez a los 15 min. Con 0 o 1 no reintenta: el 1 ya llega al administrador y se corrige a mano (runbook §4).
+4. Anota cada intento y su código en `logs\tarea.log`, y borra sus propias salidas de más de 90 días.
+
+Antes de la primera ejecución real se puede registrar un **ensayo** (`-Ensayo '<fecha hora>' -CorreoEnsayo <correo>`). Es una ejecución única en modo prueba que manda todo a ese correo en lugar del administrador, y la tarea se borra sola a los 7 días.
+
+**Límite conocido:** si el equipo se reinicia y nadie inicia sesión, la tarea no corre ni avisa. Se mitiga con el inicio de sesión automático de Windows (con bloqueo de pantalla) y con horas activas de Windows Update que cubran las 05:00.
+
+La operación diaria (cambiar destinatarios, reenviar con `--forzar`, qué hacer ante cada código de salida) va en `docs/runbook.md`.
 
 ## 16. Seguridad
 
@@ -575,7 +587,7 @@ asistencia-bot/
 ├─ config/                           settings.example.toml, grupos.example.yaml (los reales no se versionan)
 ├─ docs/                             arquitectura.md, runbook.md, guia-cliente.md, adr/0001–0005
 ├─ exploracion/                      herramientas de la Fase 1 (no es código de producción)
-├─ scripts/registrar_tarea.ps1       Fase 4
+├─ scripts/                          registrar_tarea.ps1 (registra la tarea), ejecutar_tarea.ps1 (lo que corre)
 ├─ src/asistencia_bot/
 │  ├─ __main__.py, cli.py            ejecutar · verificar · estado · credenciales
 │  ├─ bootstrap.py                   composition root

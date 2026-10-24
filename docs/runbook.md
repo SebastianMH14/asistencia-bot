@@ -8,7 +8,7 @@ Para quien opera el bot en el equipo de HikCentral. Los comandos se ejecutan en 
 
 ## 1. Operación normal
 
-- **Cada lunes** (hora configurada en la tarea programada) el bot envía a cada jefe el Excel de la semana anterior.
+- **Cada lunes a las 05:00** (tarea programada, sección 10) el bot envía a cada jefe el Excel de la semana anterior, de lunes a domingo.
 - El administrador recibe un correo de resumen: `[asistencia-bot] OK – semana del …`.
 - Para ver qué pasó:
   - `asistencia-bot estado` muestra las últimas ejecuciones y el estado de cada grupo.
@@ -21,7 +21,8 @@ Para quien opera el bot en el equipo de HikCentral. Los comandos se ejecutan en 
 |---|---|---|
 | `0` · "OK" | Todo enviado, o grupos omitidos a propósito (ya enviados o sin registros) | Nada |
 | `1` · "con fallos" | Al menos un grupo falló, o no se pudo enviar el resumen | Leer la columna *Detalle* del resumen (y las capturas adjuntas). Corregir y **reenviar solo ese grupo** (sección 4) |
-| `2` · "ERROR" | Error fatal: no se procesó ningún grupo, o se cortó a mitad | Ver la sección 3. Luego ejecutar de nuevo. Los grupos ya enviados no se repiten |
+| `2` · "ERROR" | Error fatal: no se procesó ningún grupo, o se cortó a mitad | La tarea lo reintenta sola una vez a los 15 min. Si llega un segundo "ERROR": ver la sección 3 y ejecutar de nuevo. Los grupos ya enviados no se repiten |
+| No llega ningún resumen el lunes | La tarea no corrió: nadie había iniciado sesión en Windows, o el equipo estaba apagado | Sección 10, "Si el lunes no llegó nada" |
 
 ## 3. Errores frecuentes
 
@@ -89,6 +90,8 @@ modo_por_defecto = "produccion"
 
 Luego ejecutar `asistencia-bot verificar`. Exige que todos los grupos activos tengan jefe.
 
+Está activa desde el 2026-10-23. Para **volver a modo prueba**: `produccion_habilitada = false` y `modo_por_defecto = "prueba"`. Desde ese momento, la tarea de los lunes manda todo solo al administrador. Para no enviar nada, se deshabilita la tarea (sección 10).
+
 ## 8. Logs, histórico y retención
 
 - `logs\bot.jsonl`: una línea JSON por evento, con rotación de 5 MB × 10 archivos. Sin nombres, cédulas ni contraseñas.
@@ -108,4 +111,54 @@ Si Edge se actualiza y Playwright deja de controlarlo: `uv lock --upgrade-packag
 
 ## 10. Tarea programada
 
-Pendiente de la Fase 4 (`scripts\registrar_tarea.ps1`).
+La tarea `asistencia-bot - reporte semanal` corre **los lunes a las 05:00**. Se ejecuta con el usuario `<usuario>` y solo mientras su sesión de Windows está iniciada.
+- Lanza `scripts\ejecutar_tarea.ps1`, que espera a HikCentral y HCWebControl y ejecuta `asistencia-bot ejecutar`.
+- Ante un error fatal, reintenta una vez.
+- El detalle está en la arquitectura, §15.
+
+**Registrar, o cambiar el día o la hora.** Se hace desde la terminal del usuario `<usuario>` y no requiere ser administrador. Volver a registrarla reemplaza la anterior.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\registrar_tarea.ps1               # lunes 05:00
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\registrar_tarea.ps1 -Hora 06:30    # otra hora
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\registrar_tarea.ps1 -WhatIf        # solo muestra qué haría
+```
+
+**Ensayo.** Es una ejecución única en modo prueba, con todos los correos dirigidos a un buzón de pruebas. La tarea del ensayo se borra sola a los 7 días.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\registrar_tarea.ps1 -Ensayo '2026-10-24 05:00' -CorreoEnsayo pruebas@ejemplo.com
+```
+
+**Revisar:**
+
+```powershell
+Get-ScheduledTask | Where-Object TaskName -like 'asistencia-bot*' | Get-ScheduledTaskInfo   # LastRunTime, LastTaskResult, NextRunTime
+Get-Content -Encoding UTF8 logs\tarea.log -Tail 20                                           # intentos y códigos de salida
+asistencia-bot estado
+```
+
+`LastTaskResult` es el código de salida del bot (0, 1 o 2); `267011` significa que todavía no ha corrido. La salida completa de cada intento queda en `logs\tarea\`.
+
+**Ejecutarla ahora.** Si la producción está activa, envía de verdad. Los grupos ya enviados esa semana no se repiten.
+
+```powershell
+Start-ScheduledTask -TaskName 'asistencia-bot - reporte semanal'
+```
+
+**Pausar o quitar:**
+
+```powershell
+Disable-ScheduledTask -TaskName 'asistencia-bot - reporte semanal'      # Enable-ScheduledTask para reanudar
+Unregister-ScheduledTask -TaskName 'asistencia-bot - reporte semanal' -Confirm:$false
+```
+
+**Para que corra todos los lunes:**
+- A las 05:00, la sesión de Windows de `<usuario>` tiene que estar **iniciada**. Puede estar bloqueada (Win+L), pero no cerrada.
+- Tras un reinicio (Windows Update, corte de luz) nadie inicia sesión solo. Para eso hay que activar el **inicio de sesión automático** de Windows y, por seguridad, el bloqueo de pantalla al entrar.
+- Las **horas activas** de Windows Update tienen que incluir las 05:00 (por ejemplo, 04:00–22:00), para que el equipo no se reinicie justo a esa hora.
+- El equipo no debe suspenderse.
+
+**Si el lunes no llegó nada, ni siquiera el resumen:**
+1. Inicia sesión en Windows con `<usuario>`. La tarea corre sola en unos minutos ("lo antes posible si se omitió").
+2. Si aun así no corre, revisa `logs\tarea.log` y `Get-ScheduledTaskInfo`, o lánzala con `Start-ScheduledTask`.

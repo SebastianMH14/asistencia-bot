@@ -78,7 +78,13 @@ Todo con el **mismo usuario de Windows** que va a ejecutar la tarea programada, 
    .venv\Scripts\asistencia-bot.exe ejecutar --modo prueba  # todos los correos van al administrador
    ```
 
-6. Programa la tarea semanal con `scripts\registrar_tarea.ps1` (Fase 4).
+6. Programa la tarea semanal (lunes 05:00) desde tu propia terminal:
+
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\registrar_tarea.ps1
+   ```
+
+   Detalles en [`docs/runbook.md`](docs/runbook.md) §10.
 
 ## Uso
 
