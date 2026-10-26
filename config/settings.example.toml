@@ -52,3 +52,8 @@ reintentos = 3
 
 [administrador]
 correo = "admin@ejemplo.com"      # recibe resúmenes, alertas y, en modo prueba, todo
+
+[vigilancia]
+# Log de HikCentral con los eventos que recibe de los lectores (ADR-0006). Lo lee
+# `asistencia-bot vigilar-lector`; esta es la ruta de una instalación por defecto.
+# log_eventos = 'C:\Program Files (x86)\HikCentral Access Control\VSM Servers\Log\SYS\baseacs.d\EventStatistics.log'

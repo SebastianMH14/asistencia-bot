@@ -215,6 +215,7 @@ class RenderizadorCorreos(Protocol):
     def correo_sin_registros(self, grupo, periodo) -> Correo: ...
     def correo_resumen(self, ejecucion: Ejecucion, para: str, adjuntos: Sequence[Path]) -> Correo: ...
     def redirigir_a_prueba(self, correo: Correo, administrador: str) -> Correo: ...  # [PRUEBA]
+    def correo_alerta_lector(self, para, ahora, estado: EstadoLector | None, error) -> Correo: ...
 
 class RepositorioEstado(Protocol):
     def iniciar_ejecucion(self, ejecucion: Ejecucion) -> None: ...
@@ -222,6 +223,9 @@ class RepositorioEstado(Protocol):
     def finalizar_ejecucion(self, ejecucion: Ejecucion) -> None: ...
     def ya_enviado(self, periodo: Periodo, grupo: str) -> bool: ...  # solo envíos de producción
     def ultimas_ejecuciones(self, n: int) -> list[Ejecucion]: ...
+
+class FuenteEventos(Protocol):                  # vigilancia del lector (ADR-0006)
+    def muestras(self) -> list[MuestraEventos]: ...    # ErrorLectura si no puede leer
 ```
 
 ## 8. Adaptadores
@@ -237,6 +241,7 @@ class RepositorioEstado(Protocol):
 | `adapters/plantillas.py` | `RenderizadorCorreos` | `jinja2` | Existe |
 | `adapters/estado_sqlite.py` | `RepositorioEstado` | `sqlite3` | Existe |
 | `adapters/reloj.py` | `Reloj` | `zoneinfo` + `tzdata` | Existe |
+| `adapters/log_eventos_hik.py` | `FuenteEventos` | lectura del log `EventStatistics.log` de HikCentral (ADR-0006) | Existe |
 | `adapters/candado.py` | (lo usa `cli`/`bootstrap`) | `msvcrt.locking` sobre `ejecucion.lock` | Existe |
 ### 8.1 Extractor de HikCentral (`adapters/hikcentral/`)
 
@@ -502,6 +507,7 @@ Todo cuelga de `rutas.base`.
 | `ejecutar --visible` | Navegador visible para depurar | **Existe** |
 | `verificar` | Revisa configuración, credenciales, SMTP (conexión y login), que HikCentral responda, que HCWebControl escuche y que la carpeta sea escribible. **No exporta.** Código 0 o 2. | **Existe** |
 | `estado [-n 10]` | Últimas ejecuciones y resultados por grupo | **Existe** |
+| `vigilar-lector [--sin-correo]` | ¿Hoy llegaron marcaciones a HikCentral? Si no, alerta al administrador (ADR-0006). Código 0 hay, 1 no hay o no se pudo revisar, 2 no se pudo avisar | **Existe** |
 
 `ejecutar` sin `--modo` usa el `modo_por_defecto` de la configuración. Era `prueba` hasta la aprobación del cliente (2026-10-23); desde entonces es `produccion`, que es lo que corre la tarea semanal.
 
@@ -528,6 +534,11 @@ Todo cuelga de `rutas.base`.
 4. Anota cada intento y su código en `logs\tarea.log`, y borra sus propias salidas de más de 90 días.
 
 Antes de la primera ejecución real se puede registrar un **ensayo** (`-Ensayo '<fecha hora>' -CorreoEnsayo <correo>`). Es una ejecución única en modo prueba que manda todo a ese correo en lugar del administrador, y la tarea se borra sola a los 7 días.
+
+**Vigilancia del lector** (ADR-0006). Hay una segunda tarea, `asistencia-bot - vigilancia del lector`:
+- Corre de lunes a sábado a las 10:00 (`-HoraVigilancia`), con el mismo usuario y la misma seguridad que la semanal.
+- Lanza `pythonw -m asistencia_bot vigilar-lector`, sin ventana, con un límite de 10 min.
+- Si hoy no han llegado marcaciones a HikCentral, avisa al administrador el mismo día en vez del lunes siguiente.
 
 **Límite conocido:** si el equipo se reinicia y nadie inicia sesión, la tarea no corre ni avisa. Se mitiga con el inicio de sesión automático de Windows (con bloqueo de pantalla) y con horas activas de Windows Update que cubran las 05:00.
 
@@ -579,6 +590,7 @@ Metas:
 | [0003](adr/0003-navegador-edge-headless.md) | Edge instalado (`channel="msedge"`), headless | Aceptada |
 | [0004](adr/0004-usuario-hikcentral.md) | Usuario de HikCentral para el bot (recomendado: dedicado) | Propuesta [Cliente] |
 | [0005](adr/0005-validacion-de-filas.md) | Validación de filas frente a la paginación rota de HikCentral | Aceptada |
+| [0006](adr/0006-vigilancia-del-lector.md) | Vigilancia diaria del lector a partir del log de HikCentral | Aceptada |
 
 ## 20. Estructura del repositorio
 
@@ -587,22 +599,23 @@ asistencia-bot/
 ├─ CLAUDE.md, DISCOVERY.md, README.md
 ├─ pyproject.toml / uv.lock          dependencias (uv, Python 3.13)
 ├─ config/                           settings.example.toml, grupos.example.yaml (los reales no se versionan)
-├─ docs/                             arquitectura.md, runbook.md, guia-cliente.md, adr/0001–0005
+├─ docs/                             arquitectura.md, runbook.md, guia-cliente.md, adr/0001–0006
 ├─ exploracion/                      herramientas de la Fase 1 (no es código de producción)
-├─ scripts/                          registrar_tarea.ps1 (registra la tarea), ejecutar_tarea.ps1 (lo que corre)
+├─ scripts/                          registrar_tarea.ps1 (registra las tareas), ejecutar_tarea.ps1 (lo que corre la semanal)
 ├─ src/asistencia_bot/
-│  ├─ __main__.py, cli.py            ejecutar · verificar · estado · credenciales
+│  ├─ __main__.py, cli.py            ejecutar · verificar · estado · vigilar-lector · credenciales
 │  ├─ bootstrap.py                   composition root
 │  ├─ config.py, logging_config.py
 │  ├─ ports.py
-│  ├─ domain/                        modelos, errores, periodo, validacion
-│  ├─ services/                      ejecutar_reporte_semanal.py
+│  ├─ domain/                        modelos, errores, periodo, validacion, vigilancia
+│  ├─ services/                      ejecutar_reporte_semanal.py, vigilar_lector.py
 │  ├─ adapters/                      hikcentral/{selectores,paginas,sesion,extractor_ui}.py, descargas,
 │  │                                 excel_validador, archivador, estado_sqlite, correo_smtp, plantillas,
-│  │                                 entorno, candado, reloj, logs, credenciales_keyring
-│  └─ templates/                     correo_jefe, correo_sin_registros, correo_resumen (.html.j2/.txt.j2)
+│  │                                 entorno, candado, reloj, logs, credenciales_keyring, log_eventos_hik
+│  └─ templates/                     correo_jefe, correo_sin_registros, correo_resumen, correo_alerta_lector
+│                                    (.html.j2/.txt.j2)
 └─ tests/
-   ├─ unit/                          115 pruebas con fakes y Excel sintéticos (sin recursos reales)
+   ├─ unit/                          141 pruebas con fakes, Excel y logs sintéticos (sin recursos reales)
    ├─ integration/                   @pytest.mark.hikcentral (Fase 3)
    └─ fixtures/                      generador de Excel sintético
 ```

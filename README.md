@@ -99,6 +99,7 @@ Todo con el **mismo usuario de Windows** que va a ejecutar la tarea programada, 
 | `asistencia-bot ejecutar --visible` | Muestra el navegador (para depurar) |
 | `asistencia-bot verificar` | Revisa configuración, contraseñas, SMTP, HikCentral, HCWebControl y carpetas, sin exportar |
 | `asistencia-bot estado [-n 10]` | Últimas ejecuciones y resultado por grupo |
+| `asistencia-bot vigilar-lector [--sin-correo]` | ¿Hoy llegaron marcaciones a HikCentral? Si no, avisa al administrador. La tarea diaria lo corre de lunes a sábado a las 10:00 |
 | `asistencia-bot credenciales configurar\|comprobar\|borrar <hikcentral\|smtp> -u USUARIO` | Contraseñas en keyring |
 
 **Códigos de salida de `ejecutar`:**

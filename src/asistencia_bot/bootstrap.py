@@ -10,6 +10,7 @@ from asistencia_bot.adapters.estado_sqlite import EstadoSqlite
 from asistencia_bot.adapters.excel_validador import InspectorExcel
 from asistencia_bot.adapters.hikcentral.extractor_ui import ExtractorHikCentralUI
 from asistencia_bot.adapters.hikcentral.sesion import SesionNavegador
+from asistencia_bot.adapters.log_eventos_hik import LogEventosHik
 from asistencia_bot.adapters.logs import PATRON_LOGS_ROTADOS
 from asistencia_bot.adapters.plantillas import RenderizadorJinja
 from asistencia_bot.adapters.reloj import RelojSistema
@@ -20,6 +21,7 @@ from asistencia_bot.services.ejecutar_reporte_semanal import (
     EjecutarReporteSemanal,
     PoliticaReintentos,
 )
+from asistencia_bot.services.vigilar_lector import VigilarLector
 
 
 def crear_almacen_credenciales() -> AlmacenCredenciales:
@@ -64,6 +66,17 @@ def crear_verificador(
         puerto_hcwebcontrol=hik.puerto_hcwebcontrol,
         credenciales=credenciales,
         usuario_smtp=ajustes.smtp.usuario if ajustes.smtp and modo.envia_correos else None,
+    )
+
+
+def construir_vigilancia(config: Configuracion) -> VigilarLector:
+    a = config.ajustes
+    return VigilarLector(
+        reloj=RelojSistema(a.ejecucion.zona_horaria),
+        fuente=LogEventosHik(a.vigilancia.log_eventos, a.ejecucion.zona_horaria),
+        notificador=crear_notificador(a, crear_almacen_credenciales()),
+        renderizador=crear_renderizador(),
+        administrador=a.administrador.correo if a.administrador else None,
     )
 
 

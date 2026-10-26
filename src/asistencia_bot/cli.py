@@ -1,10 +1,12 @@
 """Línea de comandos del bot.
 
 Códigos de salida de `ejecutar` (los usa el Programador de tareas): 0 todo OK,
-1 fallos parciales, 2 error fatal. Las contraseñas se piden con getpass y nunca se imprimen.
+1 fallos parciales, 2 error fatal; los de `vigilar-lector`, en su ayuda. Las contraseñas se
+piden con getpass y nunca se imprimen.
 """
 
 import getpass
+import sys
 import tempfile
 from enum import StrEnum
 from pathlib import Path
@@ -224,6 +226,40 @@ def estado(
             filas = f" ({r.filas} filas)" if r.filas is not None else ""
             error = f" — {r.error}" if r.error else ""
             typer.echo(f"    - {r.grupo}: {r.estado.value}{filas}{error}")
+
+
+# --- vigilar-lector ---------------------------------------------------------------------
+
+
+@app.command("vigilar-lector")
+def vigilar_lector(
+    sin_correo: Annotated[
+        bool,
+        typer.Option("--sin-correo", help="Solo muestra el resultado; no avisa al administrador."),
+    ] = False,
+    config: ConfigOpt = None,
+) -> None:
+    """Revisa que hoy hayan llegado marcaciones a HikCentral; si no, avisa al administrador.
+
+    Códigos: 0 hay marcaciones, 1 no hay o no se pudo revisar, 2 había que avisar y no se pudo.
+    """
+    cfg = _cargar(config)
+    # Con pythonw (la tarea diaria, sin ventana) no hay consola.
+    configurar_logging(cfg.ajustes.rutas.logs, consola=sys.stderr is not None)
+    r = bootstrap.construir_vigilancia(cfg).ejecutar(avisar=not sin_correo)
+    if r.error:
+        typer.echo(f"No se pudo revisar el lector: {r.error}")
+    elif r.estado:
+        ultimo = f"{r.estado.ultimo_evento:%Y-%m-%d %H:%M}" if r.estado.ultimo_evento else "ninguna"
+        typer.echo(
+            f"Marcaciones desde {r.estado.desde:%Y-%m-%d %H:%M}: {r.estado.eventos} "
+            f"(última: {ultimo})"
+        )
+    if r.alerta_enviada:
+        typer.echo("Se avisó al administrador.")
+    if r.error_envio:
+        typer.echo(f"No se pudo avisar al administrador: {r.error_envio}")
+    raise typer.Exit(r.codigo_salida)
 
 
 # --- credenciales -----------------------------------------------------------------------

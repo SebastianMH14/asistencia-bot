@@ -1,0 +1,21 @@
+{% if error %}
+No se pudo revisar si HikCentral está recibiendo marcaciones: {{ error }}
+
+Revise que exista la ruta [vigilancia] log_eventos de config\settings.toml. Puede cambiar al actualizar HikCentral.
+{% else %}
+Hoy, {{ fecha }}, hasta las {{ hora }} HikCentral no ha recibido ninguna marcación del lector.
+{% if ultimo %}
+Última marcación recibida: {{ ultimo }}.
+{% else %}
+El log de HikCentral no tiene ninguna marcación. Si se actualizó HikCentral, puede que haya cambiado su formato.
+{% endif %}
+
+Sin marcaciones no hay registros de asistencia, y el reporte del lunes saldrá incompleto. Si hoy es festivo o la sede no abrió, ignore este aviso.
+
+Qué hacer:
+1. Revisar el lector en HikCentral. Puede hacer falta reconectarlo o reiniciar el servidor de HikCentral.
+2. Comprobar que vuelvan a llegar marcaciones: pasar una tarjeta y verla en los eventos de HikCentral.
+3. Descargar del lector los eventos de los días sin marcaciones y recalcular la asistencia de esos días.
+{% endif %}
+
+Revisión automática de asistencia-bot · versión {{ version }} · equipo {{ equipo }}

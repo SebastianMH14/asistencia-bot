@@ -21,6 +21,7 @@ from asistencia_bot.domain.modelos import (
     Periodo,
     ResultadoGrupo,
 )
+from asistencia_bot.domain.vigilancia import EstadoLector
 
 MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 GUION = chr(0x2013)  # raya (en dash) del asunto acordado con el cliente
@@ -161,6 +162,31 @@ class RenderizadorJinja:
             texto=texto,
             html=html,
             adjuntos=tuple(Adjunto(p.name, _mime(p), p.read_bytes()) for p in adjuntos),
+        )
+
+    def correo_alerta_lector(
+        self, para: str, ahora: datetime, estado: EstadoLector | None, error: str | None
+    ) -> Correo:
+        ultimo = estado.ultimo_evento if estado else None
+        contexto = {
+            "error": error or "",
+            "fecha": f"{DIAS_SEMANA[ahora.weekday()]} {ahora:%d/%m/%Y}",
+            "hora": f"{ahora:%H:%M}",
+            "ultimo": (
+                f"{DIAS_SEMANA[ultimo.weekday()]} {ultimo:%d/%m/%Y} a las {ultimo:%H:%M}"
+                if ultimo
+                else ""
+            ),
+            "version": self._version,
+            "equipo": socket.gethostname(),
+        }
+        texto, html = self._render("correo_alerta_lector", contexto)
+        motivo = "no se pudo revisar el lector" if error else "el lector no envía marcaciones"
+        return Correo(
+            para=(para,),
+            asunto=f"[asistencia-bot] ALERTA {GUION} {motivo} ({ahora:%d/%m %H:%M})",
+            texto=texto,
+            html=html,
         )
 
     def resumen_texto(self, ejecucion: Ejecucion) -> str:

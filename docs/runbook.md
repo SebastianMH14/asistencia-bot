@@ -41,6 +41,7 @@ Para quien opera el bot en el equipo de HikCentral. Los comandos se ejecutan en 
 | Advertencia `diferencia esperable por la paginación de HikCentral` | Defecto conocido de HikCentral con más de 100 registros ([ADR-0005](adr/0005-validacion-de-filas.md)) | Ninguna: el Excel está completo |
 | Asunto "OK con alertas": `ningún grupo tiene registros estos días: …` | Festivo, o HikCentral no recibió las marcaciones del lector esos días. Los reportes **sí se enviaron**, pero sin esos días | Si no fue festivo: revisar en HikCentral que el lector esté conectado y tenga eventos esos días, y recuperar las marcaciones. Luego reenviar la semana con `asistencia-bot ejecutar --forzar`, antes del domingo |
 | `ya hay una ejecución en curso` | Otra ejecución está corriendo | Esperar a que termine |
+| `[asistencia-bot] ALERTA – el lector no envía marcaciones` (entre semana, 10:00) | HikCentral no recibe eventos del lector, aunque lo muestre conectado | Sección 11 |
 | `no se procesó` en todos los grupos | Hubo un error fatal antes (ver el encabezado del resumen) | Resolver el error fatal |
 
 **Evidencias:** cuando un grupo falla, el resumen adjunta una captura (`capturas\`) y, si existe, un *trace* de Playwright (`traces\`).
@@ -163,3 +164,29 @@ Unregister-ScheduledTask -TaskName 'asistencia-bot - reporte semanal' -Confirm:$
 **Si el lunes no llegó nada, ni siquiera el resumen:**
 1. Inicia sesión en Windows con `<usuario>`. La tarea corre sola en unos minutos ("lo antes posible si se omitió").
 2. Si aun así no corre, revisa `logs\tarea.log` y `Get-ScheduledTaskInfo`, o lánzala con `Start-ScheduledTask`.
+
+## 11. Vigilancia del lector
+
+La tarea `asistencia-bot - vigilancia del lector` corre **de lunes a sábado a las 10:00** ([ADR-0006](adr/0006-vigilancia-del-lector.md)).
+- Revisa en el log de HikCentral cuántas marcaciones llegaron desde las 00:00.
+- Si no llegó ninguna, el administrador recibe `[asistencia-bot] ALERTA – el lector no envía marcaciones`.
+- No abre ventanas ni inicia sesión en HikCentral.
+- La registra el mismo `scripts\registrar_tarea.ps1`; `-HoraVigilancia 09:30` cambia la hora.
+
+**Por qué existe:** el lector puede dejar de enviarle eventos a HikCentral mientras HikCentral lo sigue mostrando conectado.
+- Pasó del 8 al 13/10 y del 20 al 26/10, y esas semanas el reporte salió sin esos días.
+- Sin esta vigilancia, solo se notaba el lunes siguiente.
+
+**Si llega la alerta** (y no es festivo):
+1. En HikCentral, revisar el lector: reconectarlo o reiniciar el servidor de HikCentral.
+2. Pasar una tarjeta y comprobar que el evento aparece en HikCentral. También sirve `asistencia-bot vigilar-lector --sin-correo`, que debe mostrar marcaciones de hoy.
+3. Descargar del lector los eventos de los días sin marcaciones y recalcular la asistencia de esos días.
+4. Si los días perdidos son de la semana anterior y ya se envió el reporte, reenviarlo con `asistencia-bot ejecutar --forzar` antes del domingo.
+
+**Si llega "no se pudo revisar el lector":** el log cambió de ruta, probablemente por una actualización de HikCentral. Busca `EventStatistics.log` en `C:\Program Files (x86)\HikCentral Access Control\VSM Servers\Log\SYS\` y ajusta `[vigilancia] log_eventos` en `config\settings.toml`.
+
+**Revisar a mano:**
+
+```powershell
+asistencia-bot vigilar-lector --sin-correo     # marcaciones de hoy y la última recibida; no envía nada
+```

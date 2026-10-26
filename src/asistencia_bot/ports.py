@@ -19,6 +19,7 @@ from asistencia_bot.domain.modelos import (
     ReporteExportado,
     ResultadoGrupo,
 )
+from asistencia_bot.domain.vigilancia import EstadoLector, MuestraEventos
 
 
 class Reloj(Protocol):
@@ -106,6 +107,18 @@ class RenderizadorCorreos(Protocol):
 
     def redirigir_a_prueba(self, correo: Correo, administrador: str) -> Correo:
         """Copia del correo dirigida solo al administrador, marcada [PRUEBA]."""
+        ...
+
+    def correo_alerta_lector(
+        self, para: str, ahora: datetime, estado: EstadoLector | None, error: str | None
+    ) -> Correo:
+        """Aviso al administrador: hoy no llegan marcaciones, o no se pudo revisar (`error`)."""
+        ...
+
+
+class FuenteEventos(Protocol):
+    def muestras(self) -> list[MuestraEventos]:
+        """Eventos que HikCentral recibió de los lectores. Lanza ErrorLectura si no puede."""
         ...
 
 

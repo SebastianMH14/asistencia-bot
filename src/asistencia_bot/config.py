@@ -129,6 +129,15 @@ class ConfigAdministrador(_Modelo):
     correo: CorreoStr
 
 
+class ConfigVigilancia(_Modelo):
+    # Log de HikCentral con los eventos recibidos de los lectores (ADR-0006). Puede cambiar de
+    # ruta al actualizar HikCentral; en ese caso `vigilar-lector` avisa que no pudo revisar.
+    log_eventos: Path = Path(
+        r"C:\Program Files (x86)\HikCentral Access Control\VSM Servers\Log\SYS"
+        r"\baseacs.d\EventStatistics.log"
+    )
+
+
 class Ajustes(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="ASISTENCIA_BOT_", env_nested_delimiter="__", extra="forbid", frozen=True
@@ -140,6 +149,7 @@ class Ajustes(BaseSettings):
     retencion: ConfigRetencion = ConfigRetencion()
     smtp: ConfigSmtp | None = None
     administrador: ConfigAdministrador | None = None
+    vigilancia: ConfigVigilancia = ConfigVigilancia()
     archivo_grupos: Path = Path("grupos.yaml")
 
     @classmethod

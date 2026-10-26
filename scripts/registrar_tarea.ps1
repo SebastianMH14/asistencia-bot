@@ -1,6 +1,7 @@
 ﻿<#
 .SYNOPSIS
-    Registra en el Programador de tareas la ejecución semanal del bot y, si se pide, un ensayo.
+    Registra en el Programador de tareas la ejecución semanal del bot, la vigilancia diaria del
+    lector y, si se pide, un ensayo.
 
 .DESCRIPTION
     Debe ejecutarlo el MISMO usuario de Windows que guardó las contraseñas en el Administrador
@@ -11,7 +12,13 @@
 
     La tarea lanza scripts\ejecutar_tarea.ps1, que espera al entorno, ejecuta
     `asistencia-bot ejecutar` (modo según `modo_por_defecto`) y reintenta una vez ante un
-    error fatal. Volver a ejecutar este script reemplaza las tareas existentes.
+    error fatal.
+
+    La vigilancia (lunes a sábado, a -HoraVigilancia) corre `asistencia-bot vigilar-lector`
+    con pythonw, sin abrir ventanas: si hoy no han llegado marcaciones a HikCentral, avisa al
+    administrador (ADR-0006).
+
+    Volver a ejecutar este script reemplaza las tareas existentes.
 
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -File scripts\registrar_tarea.ps1
@@ -31,6 +38,8 @@ param(
     [string]$Dia = 'Monday',
     [ValidatePattern('^\d{2}:\d{2}$')]
     [string]$Hora = '05:00',
+    [ValidatePattern('^\d{2}:\d{2}$')]
+    [string]$HoraVigilancia = '10:00',
     [datetime]$Ensayo,
     [string]$CorreoEnsayo
 )
@@ -39,10 +48,12 @@ $ErrorActionPreference = 'Stop'
 $raiz = Split-Path -Parent $PSScriptRoot
 $lanzador = Join-Path $PSScriptRoot 'ejecutar_tarea.ps1'
 $bot = Join-Path $raiz '.venv\Scripts\asistencia-bot.exe'
+$pythonw = Join-Path $raiz '.venv\Scripts\pythonw.exe'
 $nombreSemanal = 'asistencia-bot - reporte semanal'
+$nombreVigilancia = 'asistencia-bot - vigilancia del lector'
 $nombreEnsayo = 'asistencia-bot - ensayo'
 
-foreach ($ruta in @($lanzador, $bot)) {
+foreach ($ruta in @($lanzador, $bot, $pythonw)) {
     if (-not (Test-Path $ruta)) { throw "No existe $ruta" }
 }
 if ($PSBoundParameters.ContainsKey('Ensayo') -and -not $CorreoEnsayo) {
@@ -58,13 +69,13 @@ function Nueva-Accion([string]$extra) {
 }
 
 function Nuevos-Ajustes {
-    param([switch]$BorrarAlVencer)
+    param([switch]$BorrarAlVencer, [timespan]$Limite = (New-TimeSpan -Hours 2))
     $opciones = @{
         StartWhenAvailable         = $true   # "lo antes posible si se omitió un inicio programado"
         WakeToRun                  = $true
         AllowStartIfOnBatteries    = $true
         DontStopIfGoingOnBatteries = $true
-        ExecutionTimeLimit         = New-TimeSpan -Hours 2
+        ExecutionTimeLimit         = $Limite
         MultipleInstances          = 'IgnoreNew'
     }
     if ($BorrarAlVencer) { $opciones.DeleteExpiredTaskAfter = New-TimeSpan -Days 7 }
@@ -77,6 +88,18 @@ $semanal = New-ScheduledTask -Action (Nueva-Accion '') -Trigger $disparador -Pri
     -Description "Cada $Dia a las $Hora envía a cada jefe el reporte de asistencia de la semana anterior (asistencia-bot, modo según config\settings.toml)."
 if ($PSCmdlet.ShouldProcess($nombreSemanal, "Registrar: $Dia $Hora, usuario $usuario")) {
     Register-ScheduledTask -TaskName $nombreSemanal -InputObject $semanal -Force | Out-Null
+}
+
+$diasHabiles = 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
+$diario = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $diasHabiles -At $HoraVigilancia
+# pythonw: sin consola, para no abrir una ventana en medio de la jornada.
+$accionVigilancia = New-ScheduledTaskAction -Execute $pythonw `
+    -Argument '-m asistencia_bot vigilar-lector' -WorkingDirectory $raiz
+$vigilancia = New-ScheduledTask -Action $accionVigilancia -Trigger $diario -Principal $principal `
+    -Settings (Nuevos-Ajustes -Limite (New-TimeSpan -Minutes 10)) `
+    -Description "De lunes a sábado a las $HoraVigilancia avisa al administrador si hoy no han llegado marcaciones a HikCentral (asistencia-bot vigilar-lector)."
+if ($PSCmdlet.ShouldProcess($nombreVigilancia, "Registrar: lunes a sábado $HoraVigilancia, usuario $usuario")) {
+    Register-ScheduledTask -TaskName $nombreVigilancia -InputObject $vigilancia -Force | Out-Null
 }
 
 if ($PSBoundParameters.ContainsKey('Ensayo')) {
