@@ -3,7 +3,7 @@
 import mimetypes
 import socket
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,10 +31,17 @@ COLORES = {
     EstadoGrupo.OMITIDO_SIN_REGISTROS: "#8a6d00",
     EstadoGrupo.FALLIDO: "#c62828",
 }
+# Sin depender del locale de Windows.
+DIAS_SEMANA = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
 
 
 def _fecha(dia: datetime | None) -> str:
     return f"{dia:%Y-%m-%d %H:%M:%S}" if dia else "—"
+
+
+def _dias(dias: Sequence[date]) -> str:
+    """``miércoles 21/10, jueves 22/10``."""
+    return ", ".join(f"{DIAS_SEMANA[d.weekday()]} {d:%d/%m}" for d in dias)
 
 
 def _duracion(segundos: float) -> str:
@@ -123,6 +130,8 @@ class RenderizadorJinja:
             estado = "ERROR"
         elif any(r.fallido for r in ejecucion.resultados):
             estado = "con fallos"
+        elif ejecucion.dias_sin_registros:
+            estado = "OK con alertas"
         else:
             estado = "OK"
         contexto = {
@@ -132,6 +141,7 @@ class RenderizadorJinja:
             "modo": ejecucion.modo.value,
             "codigo": ejecucion.codigo_salida,
             "error_fatal": ejecucion.error_fatal or "",
+            "dias_sin_registros": _dias(ejecucion.dias_sin_registros),
             "resultados": [self._fila(r) for r in ejecucion.resultados],
             "hay_adjuntos": bool(adjuntos),
             "id": ejecucion.id,

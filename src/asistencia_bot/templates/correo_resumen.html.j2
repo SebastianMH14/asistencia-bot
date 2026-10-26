@@ -10,6 +10,13 @@
     <strong>Error fatal:</strong> {{ error_fatal }}
   </p>
   {% endif %}
+  {% if dias_sin_registros %}
+  <p style="padding: 8px 10px; background: #fff8e1; border-left: 4px solid #f9a825;">
+    <strong>Alerta:</strong> ningún grupo tiene registros estos días: {{ dias_sin_registros }}.<br>
+    Si no fueron festivos, revise en HikCentral que el lector esté enviando las marcaciones.
+    Cuando se recuperen, se puede reenviar la semana con <code>asistencia-bot ejecutar --forzar</code> (hasta el domingo).
+  </p>
+  {% endif %}
   <table cellpadding="6" cellspacing="0" style="border-collapse: collapse; font-size: 13px;">
     <thead>
       <tr style="background: #f0f0f0; text-align: left;">

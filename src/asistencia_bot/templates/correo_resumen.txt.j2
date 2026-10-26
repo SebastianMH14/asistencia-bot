@@ -3,6 +3,10 @@ Semana del {{ desde }} al {{ hasta }} · modo {{ modo }} · código de salida {{
 {% if error_fatal %}
 ERROR FATAL: {{ error_fatal }}
 {% endif %}
+{% if dias_sin_registros %}
+ALERTA: ningún grupo tiene registros estos días: {{ dias_sin_registros }}.
+Si no fueron festivos, revise en HikCentral que el lector esté enviando las marcaciones. Cuando se recuperen, se puede reenviar la semana con "asistencia-bot ejecutar --forzar" (hasta el domingo).
+{% endif %}
 {% for r in resultados %}
 - {{ r.grupo }}: {{ r.estado }} · filas Excel {{ r.filas }} · consulta {{ r.consulta }} · intentos {{ r.intentos }} · {{ r.duracion }}
   destinatarios: {{ r.destinatarios }}

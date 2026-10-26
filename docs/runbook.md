@@ -39,6 +39,7 @@ Para quien opera el bot en el equipo de HikCentral. Los comandos se ejecutan en 
 | `el Excel trae departamentos que no son de …` | Se seleccionó mal el grupo, o cambió el árbol de departamentos | Revisar `departamento_hik` en `config\grupos.yaml` (nombre exacto; "Medicos" va sin tilde) |
 | `… registros vistos en la consulta no están en el Excel` | Exportación truncada | Reintentar ese grupo; si persiste, avisar al soporte |
 | Advertencia `diferencia esperable por la paginación de HikCentral` | Defecto conocido de HikCentral con más de 100 registros ([ADR-0005](adr/0005-validacion-de-filas.md)) | Ninguna: el Excel está completo |
+| Asunto "OK con alertas": `ningún grupo tiene registros estos días: …` | Festivo, o HikCentral no recibió las marcaciones del lector esos días. Los reportes **sí se enviaron**, pero sin esos días | Si no fue festivo: revisar en HikCentral que el lector esté conectado y tenga eventos esos días, y recuperar las marcaciones. Luego reenviar la semana con `asistencia-bot ejecutar --forzar`, antes del domingo |
 | `ya hay una ejecución en curso` | Otra ejecución está corriendo | Esperar a que termine |
 | `no se procesó` en todos los grupos | Hubo un error fatal antes (ver el encabezado del resumen) | Resolver el error fatal |
 

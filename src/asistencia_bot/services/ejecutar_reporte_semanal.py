@@ -150,6 +150,11 @@ class EjecutarReporteSemanal:
         except Exception as e:  # un error inesperado no debe dejar al administrador sin aviso
             log.exception("error inesperado")
             self._marcar_fatal(ejecucion, grupos, f"error inesperado: {type(e).__name__}")
+        if dias := ejecucion.dias_sin_registros:
+            log.warning(
+                "días sin registros en ningún grupo",
+                extra={"ejecucion_id": ejecucion.id, "dias": [d.isoformat() for d in dias]},
+            )
         ejecucion.fin = self._reloj.ahora()
         self._enviar_resumen(ejecucion, evidencias)
         self._estado.finalizar_ejecucion(ejecucion)
@@ -276,6 +281,7 @@ class EjecutarReporteSemanal:
         }
         if not validacion.valido:
             return resultado(EstadoGrupo.FALLIDO, error="; ".join(validacion.errores), **comunes)
+        comunes["fechas_con_registros"] = meta.fechas
 
         try:
             archivo = self._archivador.archivar(reporte.ruta, ejecucion.periodo, grupo)

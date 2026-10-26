@@ -1,5 +1,6 @@
 """Servicio orquestador con fakes de todos los puertos (sin HikCentral, SMTP ni disco real)."""
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -349,6 +350,7 @@ def test_validacion_fallida_no_envia(esc: Escenario) -> None:
     assert "periodo del Excel" in (e.resultados[0].error or "")
     assert _asuntos(esc) == ["Resumen 0 adjuntos"]
     assert esc.archivador.archivados == []
+    assert e.dias_sin_registros == ()  # un Excel de otra semana no dice nada de esta
 
 
 def test_sin_registros_omitir_y_reportar(tmp_path: Path) -> None:
@@ -462,3 +464,20 @@ def test_adjunto_con_nombre_limpio_aunque_el_historico_tenga_version(esc: Escena
         "Asistencia_Fisioterapeutas_2026-10-12_al_2026-10-18.xlsx",
         "Asistencia_Medicos_2026-10-12_al_2026-10-18.xlsx",
     ]
+
+
+def test_dias_sin_registros_avisan_sin_frenar_el_envio(
+    esc: Escenario, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        e = esc.ejecutar(Modo.PRODUCCION)
+
+    # Las claves sintéticas van de lunes a viernes: el sábado 17 queda sin registros.
+    assert e.dias_sin_registros == (date(2026, 10, 17),)
+    assert e.resultados[0].fechas_con_registros == frozenset(SEMANA.dias()[:5])
+    assert e.codigo_salida == 0
+    assert _estados(e) == {"Fisioterapeutas": EstadoGrupo.ENVIADO, "Médicos": EstadoGrupo.ENVIADO}
+    aviso = next(
+        r for r in caplog.records if r.getMessage() == "días sin registros en ningún grupo"
+    )
+    assert aviso.dias == ["2026-10-17"]  # type: ignore[attr-defined]

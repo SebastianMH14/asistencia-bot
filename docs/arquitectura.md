@@ -358,6 +358,8 @@ cli.ejecutar(modo, grupo?, forzar, visible)
  │        si no      → notificador.enviar(correo_jefe, destinatarios según el modo) → ENVIADO
  │        registrar_resultado(...)               (siempre, también si falla)
  │        si error final → guardar_evidencia() y FALLIDO; **continuar con el siguiente grupo**
+ ├─ días de lunes a sábado sin registros en ninguno de los grupos leídos → alerta "OK con alertas"
+ │  (festivo o lector sin marcaciones; no frena el envío ni cambia el código de salida)
  ├─ enviar correo de resumen al administrador, con capturas y traces si hubo fallos (máx. 15 MB)
  │  (en dry-run no se envía nada: la CLI imprime el resumen en la consola)
  ├─ archivador.limpiar() según la retención

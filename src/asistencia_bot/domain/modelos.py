@@ -3,7 +3,7 @@
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 
@@ -46,6 +46,11 @@ class Periodo:
 
     def contiene(self, dia: date) -> bool:
         return self.desde <= dia <= self.hasta
+
+    def dias(self) -> tuple[date, ...]:
+        return tuple(
+            self.desde + timedelta(days=i) for i in range((self.hasta - self.desde).days + 1)
+        )
 
     def etiqueta(self) -> str:
         """Nombre de carpeta del histórico: ``2026-10-12_2026-10-18``."""
@@ -129,6 +134,11 @@ class MetadatosReporte:
     claves: frozenset[ClaveRegistro] = field(default=frozenset(), repr=False)
     filas_sin_fecha: int = 0
 
+    @property
+    def fechas(self) -> frozenset[date]:
+        """Días con al menos un registro: un agregado sin IDs, que sí puede salir de memoria."""
+        return frozenset(dia for _, dia in self.claves)
+
 
 @dataclass(frozen=True, slots=True)
 class ReporteExportado:
@@ -176,6 +186,7 @@ class ResultadoGrupo:
     intentos: int = 0
     duracion_s: float = 0.0
     evidencias: tuple[Path, ...] = ()
+    fechas_con_registros: frozenset[date] | None = None  # None: el Excel no se leyó o no era válido
 
     @property
     def fallido(self) -> bool:
@@ -206,3 +217,20 @@ class Ejecucion:
     @property
     def duracion_s(self) -> float:
         return (self.fin - self.inicio).total_seconds() if self.fin else 0.0
+
+    @property
+    def dias_sin_registros(self) -> tuple[date, ...]:
+        """Días de lunes a sábado sin registros en ninguno de los grupos que se leyeron.
+
+        Suele ser un festivo o que HikCentral no recibió marcaciones (lector caído). El bot no
+        puede distinguirlos: solo avisa al administrador y no frena el envío.
+        """
+        leidas = [
+            r.fechas_con_registros for r in self.resultados if r.fechas_con_registros is not None
+        ]
+        if not leidas:
+            return ()
+        con_registros = {dia for fechas in leidas for dia in fechas}
+        return tuple(
+            dia for dia in self.periodo.dias() if dia.weekday() != 6 and dia not in con_registros
+        )

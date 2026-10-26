@@ -7,6 +7,7 @@ from asistencia_bot.domain.modelos import (
     EstadoGrupo,
     Grupo,
     Jefe,
+    MetadatosReporte,
     Modo,
     Periodo,
     ResultadoGrupo,
@@ -88,6 +89,46 @@ def test_duracion() -> None:
 def test_modo_envia_correos() -> None:
     assert Modo.PRODUCCION.envia_correos and Modo.PRUEBA.envia_correos
     assert not Modo.DRY_RUN.envia_correos
+
+
+def test_dias_y_fechas_del_reporte() -> None:
+    meta = MetadatosReporte(
+        "h", "t", "p", (), frozenset(), 3, claves=frozenset({("1", date(2026, 10, 12))})
+    )
+
+    assert SEMANA.dias()[0] == date(2026, 10, 12) and len(SEMANA.dias()) == 7
+    assert meta.fechas == frozenset({date(2026, 10, 12)})
+
+
+def test_dias_sin_registros() -> None:
+    e = _ejecucion()
+    assert e.dias_sin_registros == ()  # ningún Excel leído: no hay nada que afirmar
+
+    e.resultados = [
+        ResultadoGrupo(
+            "a",
+            EstadoGrupo.ENVIADO,
+            fechas_con_registros=frozenset({date(2026, 10, 12), date(2026, 10, 13)}),
+        ),
+        ResultadoGrupo(
+            "b",
+            EstadoGrupo.ENVIADO,
+            fechas_con_registros=frozenset({date(2026, 10, 13), date(2026, 10, 16)}),
+        ),
+        ResultadoGrupo("c", EstadoGrupo.FALLIDO),  # sin leer: no cuenta
+    ]
+
+    # Miércoles 14, jueves 15 y sábado 17; el domingo 18 no se revisa.
+    assert e.dias_sin_registros == (date(2026, 10, 14), date(2026, 10, 15), date(2026, 10, 17))
+
+
+def test_dias_sin_registros_semana_vacia() -> None:
+    e = _ejecucion()
+    e.resultados = [
+        ResultadoGrupo("a", EstadoGrupo.OMITIDO_SIN_REGISTROS, fechas_con_registros=frozenset())
+    ]
+
+    assert len(e.dias_sin_registros) == 6
 
 
 def test_nombre_entregable() -> None:

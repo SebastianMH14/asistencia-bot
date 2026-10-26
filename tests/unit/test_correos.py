@@ -107,6 +107,42 @@ def test_resumen(tmp_path: Path) -> None:
     assert "no los reenvíe" in correo.html
 
 
+def test_resumen_alerta_dias_sin_registros() -> None:
+    e = Ejecucion("abcdef12", datetime(2026, 10, 26, 5), Modo.PRODUCCION, SEMANA, "0.1.0")
+    e.resultados = [
+        ResultadoGrupo(
+            "Fisioterapeutas",
+            EstadoGrupo.ENVIADO,
+            filas=38,
+            fechas_con_registros=frozenset({date(2026, 10, 12), date(2026, 10, 13)}),
+        )
+    ]
+
+    correo = render.correo_resumen(e, "admin@x.co", [])
+
+    assert correo.asunto.startswith(f"[asistencia-bot] OK con alertas {GUION} semana del")
+    dias = "miércoles 14/10, jueves 15/10, viernes 16/10, sábado 17/10"
+    assert f"ningún grupo tiene registros estos días: {dias}." in correo.texto
+    assert dias in correo.html and "--forzar" in correo.html
+    assert e.codigo_salida == 0  # es una alerta, no un fallo
+
+
+def test_resumen_sin_alerta_si_hay_registros_todos_los_dias() -> None:
+    e = Ejecucion("abcdef12", datetime(2026, 10, 26, 5), Modo.PRODUCCION, SEMANA, "0.1.0")
+    e.resultados = [
+        ResultadoGrupo(
+            "Fisioterapeutas",
+            EstadoGrupo.ENVIADO,
+            fechas_con_registros=frozenset(SEMANA.dias()[:6]),
+        )
+    ]
+
+    correo = render.correo_resumen(e, "admin@x.co", [])
+
+    assert correo.asunto.startswith(f"[asistencia-bot] OK {GUION}")
+    assert "ALERTA" not in correo.texto and "Alerta" not in correo.html
+
+
 def test_resumen_error_fatal_y_texto_consola() -> None:
     e = Ejecucion(
         "x",
