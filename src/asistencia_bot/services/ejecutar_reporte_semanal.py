@@ -17,9 +17,11 @@ from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_expo
 from asistencia_bot.domain.errores import (
     ErrorBot,
     ErrorConfiguracion,
+    ErrorCredenciales,
     ErrorEntorno,
     ErrorFatal,
     ErrorGrupo,
+    ErrorLogin,
     ErrorNoReintentable,
     ErrorNotificacion,
 )
@@ -51,6 +53,8 @@ from asistencia_bot.ports import (
 log = logging.getLogger(__name__)
 T = TypeVar("T")
 MAX_ADJUNTOS_RESUMEN_BYTES = 15 * 1024 * 1024
+# Reintentarlos no los arregla, y un login rechazado más acerca el bloqueo de la cuenta.
+FATALES_NO_REINTENTABLES = (ErrorLogin, ErrorCredenciales, ErrorConfiguracion)
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,8 +149,12 @@ class EjecutarReporteSemanal:
                         evidencias.extend(resultado.evidencias)
                 finally:
                     self._extractor.cerrar()
+                    for aviso in self._extractor.avisos():
+                        log.warning("aviso de HikCentral", extra={"aviso": aviso})
+                        ejecucion.avisos.append(aviso)
         except ErrorFatal as e:
             self._marcar_fatal(ejecucion, grupos, str(e))
+            ejecucion.fatal_reintentable = not isinstance(e, FATALES_NO_REINTENTABLES)
         except Exception as e:  # un error inesperado no debe dejar al administrador sin aviso
             log.exception("error inesperado")
             self._marcar_fatal(ejecucion, grupos, f"error inesperado: {type(e).__name__}")

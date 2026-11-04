@@ -83,25 +83,28 @@ class PaginaRegistros:
         if ok.count():
             ok.first.click()
 
-    def cerrar_aviso_caducidad(self, espera_ms: float = 3000) -> None:
-        """Pulsa "Ignorar" si HikCentral avisa que la contraseña caduca; si no, sigue.
+    def cerrar_aviso_caducidad(self, espera_ms: float = 3000) -> int | None:
+        """Pulsa "Ignorar" si HikCentral avisa que la contraseña caduca. Devuelve los días.
 
         El aviso tapa la página y hace fallar el clic en el módulo (2026-11-04). Se espera un
-        poco porque aparece justo después de cargar la página.
+        poco porque aparece justo después de cargar la página. Devuelve -1 si salió pero no se
+        entendió el número de días, y None si no salió.
         """
         aviso = s.aviso_caducidad_clave(self._page)
         try:
             aviso.wait_for(timeout=espera_ms)
         except PlaywrightTimeoutError:
-            return
+            return None
         dias = s.dias_para_caducar(aviso.inner_text())
         log.warning("HikCentral avisa que la contraseña caduca pronto", extra={"dias": dias})
         s.boton_ignorar(self._page).click()
         aviso.wait_for(state="hidden", timeout=self._timeout)
+        return -1 if dias is None else dias
 
-    def abrir(self) -> None:
+    def abrir(self) -> int | None:
+        """Abre el reporte; devuelve los días para que caduque la contraseña si HikCentral avisó."""
         page = self._page
-        self.cerrar_aviso_caducidad()
+        dias_caducidad = self.cerrar_aviso_caducidad()
         s.pestana_modulo(page).click()
         page.wait_for_timeout(1000)
         self.cerrar_aviso()
@@ -111,6 +114,7 @@ class PaginaRegistros:
         item.first.click()
         s.boton_exportar(page).wait_for(timeout=self._timeout)
         self.cerrar_aviso()
+        return dias_caducidad
 
     def elegir_periodo(self, opcion: str) -> None:
         candidatos = s.desplegables(self._page)

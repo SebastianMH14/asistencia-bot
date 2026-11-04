@@ -131,7 +131,7 @@ class RenderizadorJinja:
             estado = "ERROR"
         elif any(r.fallido for r in ejecucion.resultados):
             estado = "con fallos"
-        elif ejecucion.dias_sin_registros:
+        elif ejecucion.dias_sin_registros or ejecucion.avisos:
             estado = "OK con alertas"
         else:
             estado = "OK"
@@ -143,6 +143,7 @@ class RenderizadorJinja:
             "codigo": ejecucion.codigo_salida,
             "error_fatal": ejecucion.error_fatal or "",
             "dias_sin_registros": _dias(ejecucion.dias_sin_registros),
+            "avisos": list(ejecucion.avisos),
             "resultados": [self._fila(r) for r in ejecucion.resultados],
             "hay_adjuntos": bool(adjuntos),
             "id": ejecucion.id,

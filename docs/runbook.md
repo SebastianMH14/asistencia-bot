@@ -22,6 +22,7 @@ Para quien opera el bot en el equipo de HikCentral. Los comandos se ejecutan en 
 | `0` · "OK" | Todo enviado, o grupos omitidos a propósito (ya enviados o sin registros) | Nada |
 | `1` · "con fallos" | Al menos un grupo falló, o no se pudo enviar el resumen | Leer la columna *Detalle* del resumen (y las capturas adjuntas). Corregir y **reenviar solo ese grupo** (sección 4) |
 | `2` · "ERROR" | Error fatal: no se procesó ningún grupo, o se cortó a mitad | La tarea lo reintenta sola una vez a los 15 min. Si llega un segundo "ERROR": ver la sección 3 y ejecutar de nuevo. Los grupos ya enviados no se repiten |
+| `3` · "ERROR" | Error fatal que reintentar no arregla: contraseña rechazada, credencial ausente o configuración inválida | La tarea **no** reintenta: cada login fallido acerca el bloqueo de la cuenta. Corregir la causa (sección 3) y ejecutar de nuevo |
 | No llega ningún resumen el lunes | La tarea no corrió: nadie había iniciado sesión en Windows, o el equipo estaba apagado | Sección 10, "Si el lunes no llegó nada" |
 
 ## 3. Errores frecuentes
@@ -30,7 +31,7 @@ Para quien opera el bot en el equipo de HikCentral. Los comandos se ejecutan en 
 |---|---|---|
 | `HCWebControl no escucha en 127.0.0.1:15000` | Nadie inició sesión en Windows tras un reinicio | Iniciar sesión con `<usuario>`, esperar un minuto y volver a ejecutar |
 | `HikCentral no responde en https://127.0.0.1/` | Servicios de HikCentral detenidos | Revisar los servicios (SYS, Nginx, PostgreSQL) o reiniciar el equipo |
-| `HikCentral no completó el inicio de sesión` | Cambió la contraseña de HikCentral | `credenciales configurar hikcentral -u admin` |
+| `HikCentral no completó el inicio de sesión` (`El nombre de usuario o contraseña es incorrecto … se bloqueará tras N intento(s)`) | Se cambió la contraseña en HikCentral y no en el bot | `credenciales configurar hikcentral -u admin` **antes** de volver a ejecutar: cada intento con la contraseña vieja acerca el bloqueo |
 | `no hay contraseña de HikCentral/SMTP` | No se configuró o se borró | `credenciales configurar …` (sección 6) |
 | `el servidor SMTP rechazó usuario o contraseña` | Contraseña SMTP vencida o cambiada (en Gmail: contraseña de aplicación revocada) | `credenciales configurar smtp -u <usuario>` |
 | `no apareció '…xlsx' estable en 120 s` | Alguien cambió la "Ubicación de descarga personalizada" en el Centro de descargas, o HCWebControl está colgado | Dejarla en `C:\Users\<usuario>\HCWebControlService\Downloadcenter` (o ajustar `hikcentral.carpeta_descargas`); cerrar sesión y volver a entrar en Windows |

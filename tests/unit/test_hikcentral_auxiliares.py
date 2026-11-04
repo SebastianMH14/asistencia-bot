@@ -112,3 +112,16 @@ def test_resumir_error_incluye_solo_el_selector_esperado() -> None:
     assert resumen.startswith("TimeoutError: Locator.click: Timeout 30000ms exceeded. (waiting for")
     assert "el-tabs__item" in resumen
     assert "Ana" not in resumen
+
+
+def test_aviso_caducidad_para_el_resumen() -> None:
+    from asistencia_bot.adapters.hikcentral.extractor_ui import aviso_caducidad
+
+    assert aviso_caducidad("admin", None) == ()
+    [texto] = aviso_caducidad("admin", 6)
+    assert "caduca en 6 día(s)" in texto
+    assert (
+        r".venv\Scripts\python.exe -m asistencia_bot credenciales configurar hikcentral -u admin"
+        in texto
+    )
+    assert "caduca pronto" in aviso_caducidad("admin", -1)[0]

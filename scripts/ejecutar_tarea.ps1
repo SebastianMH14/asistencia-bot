@@ -91,6 +91,8 @@ foreach ($intento in 1..2) {
     if ((Test-Path $errores) -and (Get-Item $errores).Length -eq 0) { Remove-Item $errores }
     Anotar "intento $intento terminó con código $codigo (salida en logs\tarea\$marca.txt)"
     # 0 y 1 ya los reporta el bot; 1 se corrige a mano y el reenvío no repite lo enviado.
+    # 3 (contraseña rechazada, credenciales, configuración) tampoco se reintenta: otro login
+    # fallido acerca el bloqueo de la cuenta de HikCentral.
     if ($codigo -ne 2 -or $intento -eq 2) { break }
     Start-Sleep -Seconds ($PausaReintentoMin * 60)
 }

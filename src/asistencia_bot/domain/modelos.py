@@ -204,12 +204,18 @@ class Ejecucion:
     fin: datetime | None = None
     error_fatal: str | None = None
     error_resumen: str | None = None
+    avisos: list[str] = field(default_factory=list)  # para el administrador; no cambian el código
+    fatal_reintentable: bool = True
 
     @property
     def codigo_salida(self) -> int:
-        """0 todo OK, 1 fallos parciales (o no se pudo avisar al administrador), 2 fatal."""
+        """0 todo OK, 1 fallos parciales (o no se pudo avisar al administrador), 2 fatal.
+
+        3 es un fatal que reintentar no arregla (contraseña rechazada, sin credenciales,
+        configuración). La tarea no lo reintenta: cada login fallido acerca el bloqueo de la cuenta.
+        """
         if self.error_fatal:
-            return 2
+            return 2 if self.fatal_reintentable else 3
         if self.error_resumen or any(r.fallido for r in self.resultados):
             return 1
         return 0

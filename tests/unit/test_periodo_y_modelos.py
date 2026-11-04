@@ -74,6 +74,9 @@ def test_codigo_de_salida() -> None:
     assert _ejecucion(EstadoGrupo.ENVIADO, EstadoGrupo.FALLIDO).codigo_salida == 1
     assert _ejecucion(EstadoGrupo.FALLIDO).codigo_salida == 1
     assert _ejecucion(EstadoGrupo.ENVIADO, fatal="x").codigo_salida == 2
+    no_reintentable = _ejecucion(fatal="contraseña rechazada")
+    no_reintentable.fatal_reintentable = False
+    assert no_reintentable.codigo_salida == 3
     sin_resumen = _ejecucion(EstadoGrupo.ENVIADO)
     sin_resumen.error_resumen = "smtp caído"
     assert sin_resumen.codigo_salida == 1

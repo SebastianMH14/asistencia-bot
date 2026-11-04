@@ -1,8 +1,9 @@
 """Línea de comandos del bot.
 
 Códigos de salida de `ejecutar` (los usa el Programador de tareas): 0 todo OK,
-1 fallos parciales, 2 error fatal; los de `vigilar-lector`, en su ayuda. Las contraseñas se
-piden con getpass y nunca se imprimen.
+1 fallos parciales, 2 error fatal (la tarea reintenta), 3 error fatal que reintentar no
+arregla (contraseña rechazada, credenciales, configuración). Los de `vigilar-lector`, en su
+ayuda. Las contraseñas se piden con getpass y nunca se imprimen.
 """
 
 import getpass

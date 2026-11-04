@@ -107,6 +107,23 @@ def test_resumen(tmp_path: Path) -> None:
     assert "no los reenvíe" in correo.html
 
 
+def test_resumen_con_aviso_de_hikcentral() -> None:
+    e = Ejecucion("abcdef12", datetime(2026, 11, 4, 8), Modo.PRODUCCION, SEMANA, "0.1.0")
+    e.resultados = [
+        ResultadoGrupo("TI", EstadoGrupo.ENVIADO, fechas_con_registros=frozenset(SEMANA.dias()[:6]))
+    ]
+    e.avisos = ["HikCentral avisa que la contraseña de 'admin' caduca en 6 día(s)."]
+
+    correo = render.correo_resumen(e, "admin@x.co", [])
+
+    assert correo.asunto.startswith(f"[asistencia-bot] OK con alertas {GUION}")
+    assert (
+        "AVISO: HikCentral avisa que la contraseña de 'admin' caduca en 6 día(s)." in correo.texto
+    )
+    assert "caduca en 6 día(s)" in correo.html
+    assert e.codigo_salida == 0
+
+
 def test_resumen_alerta_dias_sin_registros() -> None:
     e = Ejecucion("abcdef12", datetime(2026, 10, 26, 5), Modo.PRODUCCION, SEMANA, "0.1.0")
     e.resultados = [

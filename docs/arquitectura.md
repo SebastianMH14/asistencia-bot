@@ -375,9 +375,11 @@ cli.ejecutar(modo, grupo?, forzar, visible)
 
 | Situación | Tipo | ¿Reintenta? | Resultado |
 |---|---|---|---|
-| Configuración inválida, credencial ausente, candado ocupado | Fatal | No | Código **2** (con alerta si ya se puede enviar correo) |
+| Configuración inválida o credencial ausente | Fatal | No, tampoco la tarea | Código **3** (con alerta si ya se puede enviar correo) |
+| Candado ocupado | Fatal | No (la tarea programada puede reintentar) | Código **2** |
 | HikCentral no responde o HCWebControl no está corriendo | Fatal | No (la tarea programada puede reintentar) | Alerta al administrador y código **2** |
-| Fallo de login (contraseña incorrecta) | Fatal | No: reintentar podría bloquear la cuenta | Alerta y código **2** |
+| Fallo de login (contraseña incorrecta) | Fatal | **No, tampoco la tarea**: cada intento fallido acerca el bloqueo de la cuenta (HikCentral la bloquea tras 5) | Alerta y código **3** |
+| HikCentral avisa que la contraseña caduca pronto | Aviso | — | El extractor pulsa "Ignorar" y el resumen sale "OK con alertas" con el aviso (`Ejecucion.avisos`) |
 | Sesión expirada a mitad de la ejecución | Recuperable | **Un** relogin | Continúa |
 | Selector no encontrado, timeout de UI o el archivo no aparece | Del grupo | Sí, con `tenacity` (por defecto 3 intentos y espera exponencial de 30 a 120 s) | `FALLIDO` si se agotan los intentos |
 | Periodo, departamentos o encabezados no coinciden | Del grupo | No: es determinista, reintentar no lo arregla | `FALLIDO`, no se envía |
@@ -389,7 +391,8 @@ cli.ejecutar(modo, grupo?, forzar, visible)
 **Código de salida** (lo usa el Programador de tareas):
 - `0`: todos los grupos están `ENVIADO`, `VALIDADO_SIN_ENVIO`, `OMITIDO_YA_ENVIADO` u `OMITIDO_SIN_REGISTROS`.
 - `1`: al menos un grupo quedó `FALLIDO` y al menos uno terminó bien (**fallo parcial**). También es `1` si fallaron todos los grupos pero la sesión de HikCentral funcionó.
-- `2`: error fatal antes o fuera del ciclo de grupos.
+- `2`: error fatal antes o fuera del ciclo de grupos. `scripts\ejecutar_tarea.ps1` lo reintenta una vez.
+- `3`: error fatal que reintentar no arregla (`ErrorLogin`, `ErrorCredenciales`, `ErrorConfiguracion`). No se reintenta, para no gastar intentos de login.
 
 ## 11. Configuración
 

@@ -69,6 +69,10 @@ class ExtractorAsistencia(Protocol):
         """Cierra sesión y el navegador. No lanza excepciones."""
         ...
 
+    def avisos(self) -> tuple[str, ...]:
+        """Avisos de HikCentral para el administrador (p. ej., la contraseña caduca pronto)."""
+        ...
+
 
 class InspectorReporte(Protocol):
     def leer_metadatos(self, ruta: Path) -> MetadatosReporte: ...

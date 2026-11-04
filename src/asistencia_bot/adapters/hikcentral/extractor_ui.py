@@ -42,6 +42,7 @@ class ExtractorHikCentralUI:
         self._timeout_captura = timeout_captura_s
         self._relogins_maximos = relogins_maximos
         self._relogins = 0
+        self._dias_caducidad: int | None = None  # -1: avisó pero sin número de días
 
     def _clave(self) -> str:
         clave = self._credenciales.obtener("hikcentral", self._usuario)
@@ -105,7 +106,8 @@ class ExtractorHikCentralUI:
             self._sesion.iniciar_tramo()
             registros = PaginaRegistros(self._sesion.page, self._sesion.timeout_ms)
             etapa = "abrir el reporte"
-            registros.abrir()
+            if (dias := registros.abrir()) is not None:
+                self._dias_caducidad = dias
             etapa = "elegir el periodo"
             registros.elegir_periodo(s.PERIODO_SEMANA_ANTERIOR)
             etapa = "seleccionar el grupo"
@@ -148,6 +150,9 @@ class ExtractorHikCentralUI:
         self._sesion.grupo_terminado()
         return ReporteExportado(grupo.nombre, ruta, ruta.stat().st_size, consulta)
 
+    def avisos(self) -> tuple[str, ...]:
+        return aviso_caducidad(self._usuario, self._dias_caducidad)
+
     def guardar_evidencia(self, etiqueta: str) -> tuple[Path, ...]:
         return self._sesion.guardar_evidencia(etiqueta)
 
@@ -160,3 +165,16 @@ class ExtractorHikCentralUI:
                 MenuUsuario(self._sesion.page, self._sesion.timeout_ms).cerrar_sesion(self._usuario)
                 log.info("sesión de HikCentral cerrada")
         self._sesion.cerrar()
+
+
+def aviso_caducidad(usuario: str, dias: int | None) -> tuple[str, ...]:
+    """Texto para el resumen del administrador cuando HikCentral avisó que la contraseña caduca."""
+    if dias is None:
+        return ()
+    plazo = f"en {dias} día(s)" if dias >= 0 else "pronto"
+    return (
+        f"HikCentral avisa que la contraseña de {usuario!r} caduca {plazo}. Cuando venza, la "
+        "cuenta se bloquea y el bot no podrá entrar. Cámbiela en HikCentral y, enseguida, "
+        "guárdela en el bot con: .venv\\Scripts\\python.exe -m asistencia_bot credenciales "
+        f"configurar hikcentral -u {usuario}",
+    )

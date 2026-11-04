@@ -10,6 +10,11 @@
     <strong>Error fatal:</strong> {{ error_fatal }}
   </p>
   {% endif %}
+  {% for a in avisos %}
+  <p style="padding: 8px 10px; background: #fff8e1; border-left: 4px solid #f9a825;">
+    <strong>Aviso:</strong> {{ a }}
+  </p>
+  {% endfor %}
   {% if dias_sin_registros %}
   <p style="padding: 8px 10px; background: #fff8e1; border-left: 4px solid #f9a825;">
     <strong>Alerta:</strong> ningún grupo tiene registros estos días: {{ dias_sin_registros }}.<br>

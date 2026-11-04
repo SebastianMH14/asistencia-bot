@@ -72,6 +72,10 @@ class Extractor:
     cerrado: bool = False
     exportados: list[str] = field(default_factory=list)
     error_abrir: Exception | None = None
+    avisos_: tuple[str, ...] = ()
+
+    def avisos(self) -> tuple[str, ...]:
+        return self.avisos_
 
     def abrir(self) -> None:
         if self.error_abrir:
@@ -394,7 +398,8 @@ def test_login_rechazado_es_fatal(esc: Escenario) -> None:
 
     e = esc.ejecutar(Modo.PRUEBA)
 
-    assert e.codigo_salida == 2 and "rechazó" in (e.error_fatal or "")
+    # 3 y no 2: la tarea no reintenta, para no gastar intentos antes del bloqueo de la cuenta.
+    assert e.codigo_salida == 3 and "rechazó" in (e.error_fatal or "")
 
 
 def test_fatal_a_mitad_detiene_y_cierra_sesion(esc: Escenario) -> None:
@@ -402,7 +407,7 @@ def test_fatal_a_mitad_detiene_y_cierra_sesion(esc: Escenario) -> None:
 
     e = esc.ejecutar(Modo.PRODUCCION)
 
-    assert e.codigo_salida == 2
+    assert e.codigo_salida == 3  # credenciales: reintentar no lo arregla
     assert esc.extractor.exportados == ["Fisioterapeutas"]
     assert esc.extractor.cerrado
     assert _estados(e) == {"Fisioterapeutas": EstadoGrupo.FALLIDO, "Médicos": EstadoGrupo.FALLIDO}
@@ -432,7 +437,7 @@ def test_sin_notificador(esc: Escenario) -> None:
 
     e = esc.ejecutar(Modo.PRUEBA)
 
-    assert e.codigo_salida == 2 and "notificador" in (e.error_fatal or "")
+    assert e.codigo_salida == 3 and "notificador" in (e.error_fatal or "")
 
 
 def test_error_inesperado_no_deja_sin_aviso(esc: Escenario) -> None:
@@ -453,7 +458,7 @@ def test_solo_un_grupo(esc: Escenario) -> None:
 def test_grupo_desconocido_es_fatal(esc: Escenario) -> None:
     e = esc.ejecutar(Modo.DRY_RUN, solo_grupos=("TI",))  # inactivo
 
-    assert e.codigo_salida == 2 and "TI" in (e.error_fatal or "")
+    assert e.codigo_salida == 3 and "TI" in (e.error_fatal or "")
 
 
 def test_adjunto_con_nombre_limpio_aunque_el_historico_tenga_version(esc: Escenario) -> None:
@@ -481,3 +486,16 @@ def test_dias_sin_registros_avisan_sin_frenar_el_envio(
         r for r in caplog.records if r.getMessage() == "días sin registros en ningún grupo"
     )
     assert aviso.dias == ["2026-10-17"]  # type: ignore[attr-defined]
+
+
+def test_avisos_de_hikcentral_llegan_al_resumen(
+    esc: Escenario, caplog: pytest.LogCaptureFixture
+) -> None:
+    esc.extractor.avisos_ = ("la contraseña de 'admin' caduca en 6 día(s)",)
+
+    with caplog.at_level(logging.WARNING):
+        e = esc.ejecutar(Modo.PRODUCCION)
+
+    assert e.avisos == ["la contraseña de 'admin' caduca en 6 día(s)"]
+    assert e.codigo_salida == 0  # es un aviso, no un fallo
+    assert any(r.getMessage() == "aviso de HikCentral" for r in caplog.records)
