@@ -66,16 +66,16 @@ Todo con el **mismo usuario de Windows** que va a ejecutar la tarea programada, 
 4. Guarda las contraseñas. Se piden sin mostrarse y quedan en el Administrador de credenciales de Windows:
 
    ```powershell
-   .venv\Scripts\asistencia-bot.exe credenciales configurar hikcentral -u admin
-   .venv\Scripts\asistencia-bot.exe credenciales configurar smtp -u reportes@ejemplo.com
+   .venv\Scripts\python.exe -m asistencia_bot credenciales configurar hikcentral -u admin
+   .venv\Scripts\python.exe -m asistencia_bot credenciales configurar smtp -u reportes@ejemplo.com
    ```
 
 5. Verifica y prueba:
 
    ```powershell
-   .venv\Scripts\asistencia-bot.exe verificar
-   .venv\Scripts\asistencia-bot.exe ejecutar --dry-run      # exporta y valida, no envía nada
-   .venv\Scripts\asistencia-bot.exe ejecutar --modo prueba  # todos los correos van al administrador
+   .venv\Scripts\python.exe -m asistencia_bot verificar
+   .venv\Scripts\python.exe -m asistencia_bot ejecutar --dry-run      # exporta y valida, no envía nada
+   .venv\Scripts\python.exe -m asistencia_bot ejecutar --modo prueba  # todos los correos van al administrador
    ```
 
 6. Programa la tarea semanal (lunes 05:00) desde tu propia terminal:

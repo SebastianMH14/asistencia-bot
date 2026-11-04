@@ -36,7 +36,7 @@ Cambie `activo: true` por `activo: false`.
 En PowerShell, desde `C:\Users\<usuario>\asistencia-bot`:
 
 ```powershell
-.venv\Scripts\asistencia-bot.exe verificar
+.venv\Scripts\python.exe -m asistencia_bot verificar
 ```
 
 Todo debe decir **OK**. Si sale **FALLA**, el mensaje indica qué línea o campo corregir.

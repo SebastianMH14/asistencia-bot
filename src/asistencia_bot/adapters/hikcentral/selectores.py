@@ -85,6 +85,27 @@ def pestana_modulo(page: Page, nombre: str = MODULO_ASISTENCIA) -> Locator:
     )
 
 
+PATRON_CADUCIDAD = re.compile(r"contraseña de inicio de sesión caducará en\s*(\d+)", re.I)
+
+
+def aviso_caducidad_clave(page: Page) -> Locator:
+    """ "Su contraseña de inicio de sesión caducará en N Día/s…": modal que tapa la página.
+
+    Sale tras el login y en cada recarga mientras falten pocos días (visto el 2026-11-04).
+    """
+    return page.get_by_text(PATRON_CADUCIDAD).filter(visible=True).first
+
+
+def boton_ignorar(page: Page) -> Locator:
+    """Solo cierra el aviso de caducidad; no cambia nada en HikCentral."""
+    return page.get_by_role("button", name="Ignorar", exact=True).filter(visible=True).first
+
+
+def dias_para_caducar(texto: str) -> int | None:
+    m = PATRON_CADUCIDAD.search(" ".join(texto.split()))
+    return int(m[1]) if m else None
+
+
 def aviso_actualizar_ok(page: Page) -> Locator:
     """OK del aviso "Haga clic aquí para actualizar…". Nunca marcar "No vuelva a mostrar"."""
     return page.locator("button.refresh-know").filter(visible=True)

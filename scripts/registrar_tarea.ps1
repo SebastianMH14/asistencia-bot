@@ -47,13 +47,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $raiz = Split-Path -Parent $PSScriptRoot
 $lanzador = Join-Path $PSScriptRoot 'ejecutar_tarea.ps1'
-$bot = Join-Path $raiz '.venv\Scripts\asistencia-bot.exe'
+$python = Join-Path $raiz '.venv\Scripts\python.exe'
 $pythonw = Join-Path $raiz '.venv\Scripts\pythonw.exe'
 $nombreSemanal = 'asistencia-bot - reporte semanal'
 $nombreVigilancia = 'asistencia-bot - vigilancia del lector'
 $nombreEnsayo = 'asistencia-bot - ensayo'
 
-foreach ($ruta in @($lanzador, $bot, $pythonw)) {
+foreach ($ruta in @($lanzador, $python, $pythonw)) {
     if (-not (Test-Path $ruta)) { throw "No existe $ruta" }
 }
 if ($PSBoundParameters.ContainsKey('Ensayo') -and -not $CorreoEnsayo) {

@@ -14,7 +14,7 @@ Bot en Python que **cada lunes** exporta de HikCentral Access Control el reporte
 | 1. Prueba de concepto (login, exportar Fisioterapeutas, capturar el archivo, validar) | **Terminada y aprobada (2026-10-20).** La PoC funciona en modo visible y headless, con captura por carpeta, cierre de sesión y sin cerrar otras sesiones. Más de 100 filas: el Excel está completo y la paginación de la interfaz está rota (ADR-0005). ADRs 0001–0005. |
 | 2. Construcción | **Terminada (2026-10-20).**<br>- Código completo según `docs/arquitectura.md`.<br>- 115 pruebas unitarias.<br>- ruff y `mypy --strict` en verde.<br>- Cobertura: dominio 100 %, servicios 95 %. |
 | 3. Pruebas (integración: `--dry-run` de todos los grupos, luego `--modo prueba`) | **Terminada (2026-10-23).**<br>- `--dry-run` OK el 2026-10-20: 4 grupos validados (22/65/73/75 filas, una página cada uno), código 0, 79 s.<br>- Corregido antes: `recargar()` usaba `goto('#/')`, que solo cambia el hash; ahora usa `page.reload()`.<br>- `--modo prueba` OK el 2026-10-23: `verificar` todo OK; 4 grupos enviados (22/65/73/75), código 0, 88 s. Las muestras fueron al responsable de aprobación del cliente con un cambio puntual del administrador (`ASISTENCIA_BOT_ADMINISTRADOR__CORREO`, solo esa ejecución).<br>- Corregido después: el adjunto llevaba `_v2` cuando el histórico ya tenía otra copia; ahora siempre se llama `Asistencia_<Grupo>_<desde>_al_<hasta>.xlsx`.<br>- El cliente aprobó la producción el 2026-10-23. |
-| 4. Tarea programada y puesta en producción | **En curso (2026-10-23).**<br>- Producción activada en `config/settings.toml` (`modo_por_defecto = "produccion"`, `produccion_habilitada = true`), con el administrador definitivo.<br>- Tareas registradas con `scripts/registrar_tarea.ps1`: *asistencia-bot - reporte semanal* (lunes 05:00) y *asistencia-bot - ensayo* (2026-10-24 05:00, modo prueba al correo de pruebas del usuario; se borra sola a los 7 días).<br>- Ensayo del 2026-10-24: código 0. **Primera producción el 2026-10-26: código 0, 4 grupos enviados (9/38/48/45 filas).**<br>- Hallazgo del 2026-10-26: HikCentral no tiene registros del 21 al 25/10 en ningún grupo. El cálculo de asistencia corrió, pero no llegaron marcaciones del lector. Es un problema de HikCentral o del dispositivo, no del bot, y lo revisa el cliente. Si se recuperan, se reenvía con `--forzar` antes del 2026-11-01.<br>- Desde entonces, el resumen avisa ("OK con alertas") cuando un día de lunes a sábado no tiene registros en ningún grupo leído (`Ejecucion.dias_sin_registros`). No frena el envío.<br>- **Vigilancia del lector** (ADR-0006, 2026-10-26): `vigilar-lector` suma los eventos (`input`) del `EventStatistics.log` de HikCentral desde las 00:00 y, si no hay ninguno, alerta al administrador. La tarea *asistencia-bot - vigilancia del lector* corre de lunes a sábado a las 10:00 con `pythonw` (sin ventana). Con el log real habría avisado el 9/10 y el 21/10, sin falsas alarmas.<br>- Pendiente del usuario: inicio de sesión automático de Windows y horas activas de Windows Update (ver "Trampas"). |
+| 4. Tarea programada y puesta en producción | **En curso (2026-10-23).**<br>- Producción activada en `config/settings.toml` (`modo_por_defecto = "produccion"`, `produccion_habilitada = true`), con el administrador definitivo.<br>- Tareas registradas con `scripts/registrar_tarea.ps1`: *asistencia-bot - reporte semanal* (lunes 05:00) y *asistencia-bot - ensayo* (2026-10-24 05:00, modo prueba al correo de pruebas del usuario; se borra sola a los 7 días).<br>- Ensayo del 2026-10-24: código 0. **Primera producción el 2026-10-26: código 0, 4 grupos enviados (9/38/48/45 filas).**<br>- Hallazgo del 2026-10-26: HikCentral no tiene registros del 21 al 25/10 en ningún grupo. El cálculo de asistencia corrió, pero no llegaron marcaciones del lector. Es un problema de HikCentral o del dispositivo, no del bot, y lo revisa el cliente. Si se recuperan, se reenvía con `--forzar` antes del 2026-11-01.<br>- Desde entonces, el resumen avisa ("OK con alertas") cuando un día de lunes a sábado no tiene registros en ningún grupo leído (`Ejecucion.dias_sin_registros`). No frena el envío.<br>- **Vigilancia del lector** (ADR-0006, 2026-10-26): `vigilar-lector` suma los eventos (`input`) del `EventStatistics.log` de HikCentral desde las 00:00 y, si no hay ninguno, alerta al administrador. La tarea *asistencia-bot - vigilancia del lector* corre de lunes a sábado a las 10:00 con `pythonw` (sin ventana). Con el log real habría avisado el 9/10 y el 21/10, sin falsas alarmas.<br>- **2026-11-02: el reporte no se envió.** El Control inteligente de aplicaciones de Windows bloqueó `asistencia-bot.exe` (ADR-0007), y el 29/10 ya había bloqueado `python313.dll` en la vigilancia. Desde el 2026-11-04 todo se lanza con `python.exe -m asistencia_bot`.<br>- **2026-11-04:** HikCentral mostraba tras el login el aviso "Su contraseña de inicio de sesión caducará en 6 días", que tapaba la página. El extractor lo cierra con "Ignorar". Reenvío de la semana del 26/10 al 1/11 lanzado por la tarea a pedido del usuario: código 0, 5 grupos (24/97/129/126/4 filas), lunes a sábado completos. TI quedó activo desde ese día; en HikCentral tiene una sola persona.<br>- Pendiente del usuario: cambiar la contraseña de `admin` en HikCentral antes de que venza (~2026-11-10) y luego `credenciales configurar`; decidir si se desactiva el Control inteligente de aplicaciones; inicio de sesión automático de Windows y horas activas de Windows Update (ver "Trampas"). |
 
 **Regla de avance:** no se pasa a la fase siguiente sin mostrarle los hallazgos al usuario y recibir su visto bueno. Cada fase termina con un commit.
 
@@ -79,10 +79,11 @@ Get-Content -Encoding UTF8 logs\tarea.log -Tail 20     # intentos de la tarea y 
 ```
 
 - PowerShell 5.1 no tiene `&&`, `||` ni `?:`. Se encadena con `;` o con `if ($?) { ... }`.
-- `.venv\Scripts\asistencia-bot.exe` funciona sin `uv` en el PATH. La tarea programada lo lanza a través de `scripts\ejecutar_tarea.ps1`, que espera a HikCentral y HCWebControl y reintenta una vez ante el código 2.
+- **Sin `uv`, usar `.venv\Scripts\python.exe -m asistencia_bot <comando>`**, nunca `.venv\Scripts\asistencia-bot.exe`: Windows bloquea ese lanzador (ADR-0007). La tarea semanal lo lanza así a través de `scripts\ejecutar_tarea.ps1`, que espera a HikCentral y HCWebControl y reintenta una vez ante el código 2. La vigilancia usa `pythonw.exe -m asistencia_bot`.
+- `uv run` regenera `asistencia-bot.exe` cada vez que reinstala el proyecto. No afecta a las tareas, pero si una ejecución desde la terminal de Claude es bloqueada por Windows, usar `python.exe -m`.
 - **Si el ejecutable está en uso** (por ejemplo, un `credenciales configurar` esperando en una terminal), `uv run` sin `--no-sync` falla al reinstalar el proyecto. En ese caso se usa `uv run --no-sync`.
 - **Configuración real del equipo:** `config/settings.toml` y `config/grupos.yaml`, ignorados por git.
-  - Desde el 2026-10-23 tienen `[smtp]` (Gmail), `[administrador]` (el definitivo, responsable del cliente) y jefes y copias de los 4 grupos activos, tomados del listado de áreas y líderes del cliente. TI y Personal de Apoyo están inactivos.
+  - Desde el 2026-10-23 tienen `[smtp]` (Gmail), `[administrador]` (el definitivo, responsable del cliente) y jefes y copias de los 4 grupos activos, tomados del listado de áreas y líderes del cliente. Personal de Apoyo está inactivo. TI está activo desde el 2026-11-04 y su jefe es el mismo administrador.
   - El listado de áreas (`*.xlsx` en la raíz) tiene cédulas de empleados: está ignorado por git y **nunca** se imprime fila por fila; solo agregados.
   - Desde el 2026-10-23: `modo_por_defecto = "produccion"` y `produccion_habilitada = true` (aprobación del cliente). Para desactivar la producción: `produccion_habilitada = false` y `modo_por_defecto = "prueba"`, o deshabilitar la tarea.
   - El lanzador `Probar bot asistencia.cmd` del Escritorio (no versionado) corre `--modo prueba` y manda todo al correo de pruebas del usuario, no al administrador.
@@ -106,6 +107,10 @@ Get-Content -Encoding UTF8 logs\tarea.log -Tail 20     # intentos de la tarea y 
   - Tras un reinicio (Windows Update, corte de luz) sin inicio de sesión automático, el lunes no corre hasta que alguien inicie sesión. Ahí corre sola ("lo antes posible si se omitió"), y nadie recibe aviso mientras tanto.
   - Inicio de sesión automático y horas activas de Windows Update son configuración del sistema: los cambia el usuario, no Claude.
 - Los `.ps1` de `scripts/` se guardan en UTF-8 **con BOM**; sin BOM, PowerShell 5.1 los lee en ANSI y estropea las tildes.
+- **El Control inteligente de aplicaciones de Windows está activado** (`HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy` → `VerifiedAndReputablePolicyState` = 1).
+  - Bloquea ejecutables sin firma ni reputación según la nube, así que puede variar de un día a otro.
+  - Los bloqueos quedan en el registro `Microsoft-Windows-CodeIntegrity/Operational` (eventos 3077 y 3033).
+  - Desactivarlo es irreversible y es configuración de seguridad: lo decide el usuario o el cliente, no Claude (ADR-0007).
 
 ## HikCentral: datos de referencia
 
@@ -119,7 +124,7 @@ Get-Content -Encoding UTF8 logs\tarea.log -Tail 20     # intentos de la tarea y 
   - Aux. Enfermería, Fisioterapeutas (22 personas), Médicos y Secretarias.
   - En el árbol de HikCentral **"Medicos" va sin tilde**, así que `departamento_hik: Medicos`.
   - Personal de Apoyo está **excluido** (vacío).
-  - TI: **[Cliente]** falta confirmar.
+  - TI: activo desde el 2026-11-04. En HikCentral tiene una sola persona, menos que las que tiene a cargo su jefe según el listado.
 - **Las exportaciones las escribe HCWebControl**, no el navegador:
   - Programa: `C:\Program Files\HCWebControl\HCWebControlService.exe`.
   - Corre como proceso de `<usuario>` y arranca al iniciar sesión. Habla con la web por WebSocket en `127.0.0.1:15000`.
@@ -147,6 +152,7 @@ Get-Content -Encoding UTF8 logs\tarea.log -Tail 20     # intentos de la tarea y 
   - Para el menú se usa `get_by_text(exact=True)`, porque el `li` tiene un tooltip oculto.
   - El panel de exportación se busca por CSS `aria-label`, con los controles filtrados por visibles.
 - **La sesión expira por inactividad:** aparece la notificación `.session-expire-notification` ("Inicie sesión de nuevo.").
+- **Aviso de caducidad de la contraseña** (desde el 2026-11-04): un modal "Su contraseña de inicio de sesión caducará en N Día/s" tapa la página tras el login y en cada recarga. `PaginaRegistros.cerrar_aviso_caducidad()` pulsa "Ignorar" y deja un WARNING en el log. "Ignorar" no cambia nada en HikCentral.
 - **El evento `download` de Playwright no se dispara al exportar** (lo hace HCWebControl). Se vigila la carpeta (ADR-0002).
 - **Los traces de Playwright guardan el texto de los `fill`.** Nunca hay que grabar trace durante el login ni durante la confirmación de la exportación.
 
@@ -217,7 +223,7 @@ Es un hexágono ligero con inyección manual en `bootstrap.py`. Detalle en `docs
 
 ## Pendiente de pedir al cliente (no inventar)
 
-1. ~~¿TI recibe reporte?~~ No (2026-10-23).
+1. ~~¿TI recibe reporte?~~ No (2026-10-23). **Sí desde el 2026-11-04**, a pedido del usuario: su jefe es el administrador.
 2. ~~Jefe y copias de cada grupo~~ Definidos el 2026-10-23 (`config/grupos.yaml`).
 3. ~~Correo definitivo del administrador~~ Definido el 2026-10-23 (`config/settings.toml`).
 4. ~~Cuenta remitente~~ Gmail configurado; la contraseña de aplicación está en keyring.

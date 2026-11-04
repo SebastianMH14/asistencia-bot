@@ -3,7 +3,7 @@
 Para quien opera el bot en el equipo de HikCentral. Los comandos se ejecutan en PowerShell desde `C:\Users\<usuario>\asistencia-bot`, con el usuario de Windows `<usuario>`:
 
 ```powershell
-.venv\Scripts\asistencia-bot.exe <comando>
+.venv\Scripts\python.exe -m asistencia_bot <comando>
 ```
 
 ## 1. Operación normal
@@ -41,6 +41,8 @@ Para quien opera el bot en el equipo de HikCentral. Los comandos se ejecutan en 
 | Advertencia `diferencia esperable por la paginación de HikCentral` | Defecto conocido de HikCentral con más de 100 registros ([ADR-0005](adr/0005-validacion-de-filas.md)) | Ninguna: el Excel está completo |
 | Asunto "OK con alertas": `ningún grupo tiene registros estos días: …` | Festivo, o HikCentral no recibió las marcaciones del lector esos días. Los reportes **sí se enviaron**, pero sin esos días | Si no fue festivo: revisar en HikCentral que el lector esté conectado y tenga eventos esos días, y recuperar las marcaciones. Luego reenviar la semana con `asistencia-bot ejecutar --forzar`, antes del domingo |
 | `ya hay una ejecución en curso` | Otra ejecución está corriendo | Esperar a que termine |
+| En `logs\tarea.log`: `Una directiva de Control de aplicaciones bloqueó este archivo` (y no llegó ningún correo) | El Control inteligente de aplicaciones de Windows bloqueó Python o el bot ([ADR-0007](adr/0007-lanzar-con-python-m.md)) | Volver a lanzar la tarea (sección 10). Si se repite, la solución es desactivar ese control en Seguridad de Windows. Es irreversible: lo decide el cliente |
+| En el log: `HikCentral avisa que la contraseña caduca pronto` | La contraseña de `admin` en HikCentral está por vencer. El bot cierra el aviso con "Ignorar" y sigue, pero cuando venza **la cuenta se bloquea** | Cambiar la contraseña en HikCentral y luego `credenciales configurar hikcentral -u admin` (sección 6) |
 | `[asistencia-bot] ALERTA – el lector no envía marcaciones` (entre semana, 10:00) | HikCentral no recibe eventos del lector, aunque lo muestre conectado | Sección 11 |
 | `no se procesó` en todos los grupos | Hubo un error fatal antes (ver el encabezado del resumen) | Resolver el error fatal |
 

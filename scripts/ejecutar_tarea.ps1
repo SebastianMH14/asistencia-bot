@@ -9,6 +9,10 @@
     primero espera a que respondan; si no responden, ejecuta igual para que el bot avise al
     administrador.
 
+    El bot se lanza con `python.exe -m asistencia_bot` y no con `asistencia-bot.exe`. Ese
+    lanzador lo genera uv en este equipo y no tiene firma ni reputación, así que el Control
+    inteligente de aplicaciones de Windows lo bloqueó el 2026-11-02 (ADR-0007).
+
     La salida de cada intento queda en logs\tarea\ y una línea por evento en logs\tarea.log.
     La salida del bot solo trae grupos, conteos, estados y destinatarios: nada de nombres,
     cédulas ni horarios.
@@ -17,20 +21,20 @@
     Ensayo: fuerza el modo prueba y manda todos los correos a este destinatario en lugar del
     administrador, solo en esta ejecución.
 
-.PARAMETER Exe
-    Ejecutable del bot. Solo se cambia para probar este script.
+.PARAMETER Python
+    Intérprete con el que se lanza `-m asistencia_bot`. Solo se cambia para probar este script.
 #>
 [CmdletBinding()]
 param(
     [string]$CorreoEnsayo,
     [int]$EsperaMaxMin = 15,
     [int]$PausaReintentoMin = 15,
-    [string]$Exe
+    [string]$Python
 )
 
 $ErrorActionPreference = 'Stop'
 $raiz = Split-Path -Parent $PSScriptRoot
-if (-not $Exe) { $Exe = Join-Path $raiz '.venv\Scripts\asistencia-bot.exe' }
+if (-not $Python) { $Python = Join-Path $raiz '.venv\Scripts\python.exe' }
 $carpetaTarea = Join-Path $raiz 'logs\tarea'
 $registro = Join-Path $raiz 'logs\tarea.log'
 New-Item -ItemType Directory -Force -Path $carpetaTarea | Out-Null
@@ -76,7 +80,8 @@ foreach ($intento in 1..2) {
     $errores = Join-Path $carpetaTarea "$marca.err.txt"
     Anotar "intento ${intento}: asistencia-bot $($argumentos -join ' ')$(if ($CorreoEnsayo) { ' (ensayo)' })"
     try {
-        $proceso = Start-Process -FilePath $Exe -ArgumentList $argumentos -WorkingDirectory $raiz `
+        $proceso = Start-Process -FilePath $Python -ArgumentList (@('-m', 'asistencia_bot') + $argumentos) `
+            -WorkingDirectory $raiz `
             -NoNewWindow -Wait -PassThru -RedirectStandardOutput $salida -RedirectStandardError $errores
         $codigo = $proceso.ExitCode
     } catch {

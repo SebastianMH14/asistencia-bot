@@ -7,7 +7,11 @@ from typing import Any
 import pytest
 
 from asistencia_bot.adapters.hikcentral import paginas
-from asistencia_bot.adapters.hikcentral.selectores import PATRON_PERSONAS, _css_str
+from asistencia_bot.adapters.hikcentral.selectores import (
+    PATRON_PERSONAS,
+    _css_str,
+    dias_para_caducar,
+)
 from asistencia_bot.adapters.hikcentral.sesion import resumir_error
 from asistencia_bot.domain.errores import ErrorExtraccion
 from asistencia_bot.domain.modelos import Periodo
@@ -76,6 +80,17 @@ def test_css_str_escapa_comillas() -> None:
 def test_patron_personas() -> None:
     assert PATRON_PERSONAS.search("22 personas seleccionadas").group(1) == "22"  # type: ignore[union-attr]
     assert PATRON_PERSONAS.search("Personas seleccionadas") is None
+
+
+def test_dias_para_caducar() -> None:
+    """Texto real del aviso que tapó la página el 2026-11-04."""
+    aviso = (
+        "Su contraseña de inicio de sesión caducará en\n6Día/s. Cambie su contraseña lo antes "
+        "posible. Si la contraseña no se modifica hasta su vencimiento, la cuenta se bloqueará."
+    )
+
+    assert dias_para_caducar(aviso) == 6
+    assert dias_para_caducar("Hola admin, le damos la bienvenida") is None
 
 
 def test_resumir_error_quita_call_log() -> None:

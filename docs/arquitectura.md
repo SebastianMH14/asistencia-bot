@@ -56,7 +56,7 @@ Todo corre en un solo equipo Windows, el mismo donde está instalado HikCentral.
 ```
                     Programador de tareas de Windows
                     (lunes, usuario "<usuario>", sesión iniciada [F1])
-                                  │ ejecuta .venv\Scripts\asistencia-bot.exe ejecutar
+                                  │ ejecuta .venv\Scripts\python.exe -m asistencia_bot ejecutar
                                   ▼
  ┌──────────────────────────── asistencia-bot (Python 3.13) ────────────────────────────┐
  │  cli.py ──► bootstrap.py ──► services/ejecutar_reporte_semanal.py ──► domain/        │
@@ -529,7 +529,7 @@ Todo cuelga de `rutas.base`.
 `scripts/ejecutar_tarea.ps1` es lo que corre la tarea:
 
 1. Espera hasta 15 min a que respondan HikCentral y HCWebControl. Cubre el caso en que la tarea arranca justo al iniciar sesión tras un reinicio. Si no responden, ejecuta igual para que el bot avise al administrador.
-2. Ejecuta `asistencia-bot ejecutar` y guarda su salida en `logs\tarea\<fecha>.txt`.
+2. Ejecuta `.venv\Scripts\python.exe -m asistencia_bot ejecutar` y guarda su salida en `logs\tarea\<fecha>.txt`. No usa `asistencia-bot.exe`: el Control inteligente de aplicaciones de Windows lo bloquea (ADR-0007).
 3. Con código **2** (fatal), reintenta una vez a los 15 min. Con 0 o 1 no reintenta: el 1 ya llega al administrador y se corrige a mano (runbook §4).
 4. Anota cada intento y su código en `logs\tarea.log`, y borra sus propias salidas de más de 90 días.
 
@@ -591,6 +591,7 @@ Metas:
 | [0004](adr/0004-usuario-hikcentral.md) | Usuario de HikCentral para el bot (recomendado: dedicado) | Propuesta [Cliente] |
 | [0005](adr/0005-validacion-de-filas.md) | Validación de filas frente a la paginación rota de HikCentral | Aceptada |
 | [0006](adr/0006-vigilancia-del-lector.md) | Vigilancia diaria del lector a partir del log de HikCentral | Aceptada |
+| [0007](adr/0007-lanzar-con-python-m.md) | Lanzar el bot con `python -m asistencia_bot` (Control inteligente de aplicaciones) | Aceptada |
 
 ## 20. Estructura del repositorio
 
@@ -599,7 +600,7 @@ asistencia-bot/
 ├─ CLAUDE.md, DISCOVERY.md, README.md
 ├─ pyproject.toml / uv.lock          dependencias (uv, Python 3.13)
 ├─ config/                           settings.example.toml, grupos.example.yaml (los reales no se versionan)
-├─ docs/                             arquitectura.md, runbook.md, guia-cliente.md, adr/0001–0006
+├─ docs/                             arquitectura.md, runbook.md, guia-cliente.md, adr/0001–0007
 ├─ exploracion/                      herramientas de la Fase 1 (no es código de producción)
 ├─ scripts/                          registrar_tarea.ps1 (registra las tareas), ejecutar_tarea.ps1 (lo que corre la semanal)
 ├─ src/asistencia_bot/

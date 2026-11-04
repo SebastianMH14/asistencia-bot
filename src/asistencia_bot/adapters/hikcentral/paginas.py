@@ -83,8 +83,25 @@ class PaginaRegistros:
         if ok.count():
             ok.first.click()
 
+    def cerrar_aviso_caducidad(self, espera_ms: float = 3000) -> None:
+        """Pulsa "Ignorar" si HikCentral avisa que la contraseña caduca; si no, sigue.
+
+        El aviso tapa la página y hace fallar el clic en el módulo (2026-11-04). Se espera un
+        poco porque aparece justo después de cargar la página.
+        """
+        aviso = s.aviso_caducidad_clave(self._page)
+        try:
+            aviso.wait_for(timeout=espera_ms)
+        except PlaywrightTimeoutError:
+            return
+        dias = s.dias_para_caducar(aviso.inner_text())
+        log.warning("HikCentral avisa que la contraseña caduca pronto", extra={"dias": dias})
+        s.boton_ignorar(self._page).click()
+        aviso.wait_for(state="hidden", timeout=self._timeout)
+
     def abrir(self) -> None:
         page = self._page
+        self.cerrar_aviso_caducidad()
         s.pestana_modulo(page).click()
         page.wait_for_timeout(1000)
         self.cerrar_aviso()
