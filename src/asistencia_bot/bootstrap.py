@@ -71,12 +71,16 @@ def crear_verificador(
 
 def construir_vigilancia(config: Configuracion) -> VigilarLector:
     a = config.ajustes
+    # El reporte semanal solo se controla si la tarea del lunes envía en producción (ADR-0008).
+    produccion = a.ejecucion.modo_por_defecto is Modo.PRODUCCION
     return VigilarLector(
         reloj=RelojSistema(a.ejecucion.zona_horaria),
         fuente=LogEventosHik(a.vigilancia.log_eventos, a.ejecucion.zona_horaria),
         notificador=crear_notificador(a, crear_almacen_credenciales()),
         renderizador=crear_renderizador(),
         administrador=a.administrador.correo if a.administrador else None,
+        estado=crear_estado(a) if produccion else None,
+        plazo_reporte=a.vigilancia.plazo_reporte if produccion else None,
     )
 
 

@@ -1,7 +1,8 @@
-"""Vigilancia del lector: dominio, lectura del log de HikCentral, servicio, correo y CLI."""
+"""Vigilancia diaria: lector (ADR-0006) y reporte semanal (ADR-0008). Dominio, log de HikCentral,
+servicio, correos y CLI."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -12,14 +13,22 @@ from asistencia_bot import bootstrap, cli
 from asistencia_bot.adapters.log_eventos_hik import LogEventosHik
 from asistencia_bot.adapters.plantillas import GUION, RenderizadorJinja
 from asistencia_bot.domain.errores import ErrorLectura, ErrorNotificacion
-from asistencia_bot.domain.modelos import Correo
-from asistencia_bot.domain.vigilancia import EstadoLector, MuestraEventos, revisar_lector
+from asistencia_bot.domain.modelos import Correo, Ejecucion, Modo, Periodo
+from asistencia_bot.domain.vigilancia import (
+    EstadoLector,
+    EstadoReporte,
+    MuestraEventos,
+    revisar_lector,
+    revisar_reporte,
+)
 from asistencia_bot.services.vigilar_lector import VigilarLector
 
 Z = ZoneInfo("America/Bogota")
 MIERCOLES = datetime(2026, 10, 21, 10, 0, tzinfo=Z)
 HOY = datetime(2026, 10, 21, 0, 0, tzinfo=Z)
 CAIDA = datetime(2026, 10, 20, 16, 44, 8, tzinfo=Z)
+SEMANA = Periodo(date(2026, 10, 12), date(2026, 10, 18))  # la anterior a MIERCOLES
+NUEVE = time(9, 0)
 
 
 def _linea(momento: str, eventos: int) -> str:
@@ -52,6 +61,44 @@ def test_revisar_lector_sin_marcaciones_hoy() -> None:
 
     assert estado.sin_marcaciones and estado.ultimo_evento == CAIDA
     assert revisar_lector([], HOY).ultimo_evento is None
+
+
+def _ejecucion(
+    modo: Modo = Modo.PRODUCCION,
+    periodo: Periodo = SEMANA,
+    inicio: datetime = datetime(2026, 10, 19, 5, 0, 30, tzinfo=Z),
+    *,
+    terminada: bool = True,
+) -> Ejecucion:
+    fin = inicio + timedelta(minutes=2) if terminada else None
+    return Ejecucion("e1", inicio, modo, periodo, "0.1.0", fin=fin)
+
+
+def test_revisar_reporte_antes_del_plazo_del_lunes_no_revisa() -> None:
+    lunes = datetime(2026, 10, 19, 8, 59, tzinfo=Z)
+
+    assert revisar_reporte([], lunes, NUEVE) is None
+    assert revisar_reporte([], lunes.replace(hour=9, minute=0), NUEVE) == EstadoReporte(
+        SEMANA, None
+    )
+
+
+def test_revisar_reporte_cuenta_solo_produccion_terminada_de_la_semana_anterior() -> None:
+    sabado = datetime(2026, 10, 24, 10, 0, tzinfo=Z)  # sigue revisando la misma semana
+    otras = [
+        _ejecucion(Modo.PRUEBA),
+        _ejecucion(Modo.DRY_RUN),
+        _ejecucion(periodo=Periodo(date(2026, 10, 5), date(2026, 10, 11))),
+        _ejecucion(terminada=False),  # murió sin terminar: no avisó a nadie
+    ]
+    buena = _ejecucion(inicio=datetime(2026, 10, 21, 8, 17, tzinfo=Z))
+
+    pendiente = revisar_reporte(otras, sabado, NUEVE)
+    hecho = revisar_reporte([*otras, _ejecucion(), buena], sabado, NUEVE)
+
+    assert pendiente is not None and pendiente.pendiente and pendiente.periodo == SEMANA
+    assert hecho is not None and not hecho.pendiente
+    assert hecho.ultima_ejecucion == buena.inicio
 
 
 # --- adaptador ----------------------------------------------------------------------------
@@ -109,8 +156,22 @@ class Notificador:
         self.enviados.append(correo)
 
 
+@dataclass
+class Estado:
+    ejecuciones: list[Ejecucion] = field(default_factory=list)
+    error: Exception | None = None
+
+    def ultimas_ejecuciones(self, n: int) -> list[Ejecucion]:
+        if self.error:
+            raise self.error
+        return self.ejecuciones[:n]
+
+
 def _servicio(
-    fuente: Fuente, notificador: Notificador | None, admin: str | None = "admin@x.co"
+    fuente: Fuente,
+    notificador: Notificador | None,
+    admin: str | None = "admin@x.co",
+    estado: Estado | None = None,
 ) -> VigilarLector:
     return VigilarLector(
         reloj=Reloj(),
@@ -118,7 +179,12 @@ def _servicio(
         notificador=notificador,
         renderizador=RenderizadorJinja("0.1.0"),
         administrador=admin,
+        estado=estado,  # type: ignore[arg-type]  # el fake solo implementa lo que se usa
+        plazo_reporte=NUEVE if estado is not None else None,
     )
+
+
+CON_MARCACIONES = [MuestraEventos(datetime(2026, 10, 21, 7, tzinfo=Z), 12)]
 
 
 def test_con_marcaciones_no_avisa() -> None:
@@ -175,6 +241,57 @@ def test_no_poder_avisar_da_codigo_2(notificador: Notificador | None, admin: str
     assert r.codigo_salida == 2 and r.error_envio
 
 
+def test_reporte_sin_salir_avisa_aunque_haya_marcaciones() -> None:
+    notificador = Notificador()
+
+    r = _servicio(Fuente(CON_MARCACIONES), notificador, estado=Estado([])).ejecutar()
+
+    assert r.codigo_salida == 1 and r.reporte_pendiente
+    assert r.alerta_reporte_enviada and not r.alerta_enviada
+    [correo] = notificador.enviados
+    assert correo.para == ("admin@x.co",)
+    assert "el reporte semanal no salió (semana 12/10 al 18/10)" in correo.asunto
+
+
+def test_reporte_que_ya_corrio_no_avisa() -> None:
+    notificador = Notificador()
+
+    r = _servicio(Fuente(CON_MARCACIONES), notificador, estado=Estado([_ejecucion()])).ejecutar()
+
+    assert r.codigo_salida == 0 and notificador.enviados == []
+    assert r.reporte is not None and r.reporte.ultima_ejecucion is not None
+
+
+def test_lector_y_reporte_avisan_por_separado() -> None:
+    notificador = Notificador()
+
+    r = _servicio(Fuente(), notificador, estado=Estado([])).ejecutar()
+
+    assert r.codigo_salida == 1 and r.alerta_enviada and r.alerta_reporte_enviada
+    asuntos = [c.asunto for c in notificador.enviados]
+    assert len(asuntos) == 2
+    assert "lector" in asuntos[0] and "reporte semanal" in asuntos[1]
+
+
+def test_historial_ilegible_no_impide_revisar_el_lector() -> None:
+    notificador = Notificador()
+    estado = Estado(error=RuntimeError("database is locked"))
+
+    r = _servicio(Fuente(), notificador, estado=estado).ejecutar()
+
+    assert r.error_reporte == "RuntimeError: database is locked" and r.reporte is None
+    assert r.codigo_salida == 1 and r.alerta_enviada  # el aviso del lector sí sale
+    assert len(notificador.enviados) == 1
+
+
+def test_no_poder_avisar_del_reporte_da_codigo_2() -> None:
+    notificador = Notificador(error=ErrorNotificacion("smtp"))
+
+    r = _servicio(Fuente(CON_MARCACIONES), notificador, estado=Estado([])).ejecutar()
+
+    assert r.codigo_salida == 2 and not r.alerta_reporte_enviada
+
+
 # --- correo -------------------------------------------------------------------------------
 
 
@@ -201,6 +318,20 @@ def test_correo_alerta_sin_ninguna_marcacion_o_con_error() -> None:
     assert "no se pudo leer x.log" in error.texto and "log_eventos" in error.html
 
 
+def test_correo_alerta_reporte() -> None:
+    correo = RenderizadorJinja("0.1.0").correo_alerta_reporte(
+        "a@x.co", MIERCOLES, EstadoReporte(SEMANA, None)
+    )
+
+    assert correo.para == ("a@x.co",) and correo.adjuntos == ()
+    assert correo.asunto == (
+        f"[asistencia-bot] ALERTA {GUION} el reporte semanal no salió (semana 12/10 al 18/10)"
+    )
+    assert "Hoy, miércoles 21/10/2026 a las 10:00" in correo.texto
+    assert "semana del 12/10/2026 al 18/10/2026" in correo.texto
+    assert "Programador de tareas" in correo.html and "Ejecutar" in correo.html
+
+
 # --- CLI ----------------------------------------------------------------------------------
 
 
@@ -223,3 +354,30 @@ def test_cli_vigilar_lector(
 
     assert resultado.exit_code == codigo
     assert f"Marcaciones desde 2026-10-21 00:00: {eventos}" in resultado.output
+    assert "Reporte de la semana" not in resultado.output  # en modo prueba no se revisa
+
+
+def test_cli_en_produccion_revisa_el_reporte(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    log = tmp_path / "EventStatistics.log"
+    log.write_text(_linea("2026-10-21 07:00:00", 7))
+    config = tmp_path / "config" / "settings.toml"
+    config.parent.mkdir()
+    config.write_text(
+        '[ejecucion]\nmodo_por_defecto = "produccion"\nproduccion_habilitada = true\n'
+        f"[rutas]\nbase = '{tmp_path}'\n[vigilancia]\nlog_eventos = '{log}'\n",
+        encoding="utf-8",
+    )
+    (config.parent / "grupos.yaml").write_text(
+        "grupos:\n  - {nombre: Fisioterapeutas, departamento_hik: Fisioterapeutas}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bootstrap, "RelojSistema", lambda zona: Reloj())
+    monkeypatch.setattr(cli, "configurar_logging", lambda *a, **k: None)
+
+    resultado = CliRunner().invoke(cli.app, ["vigilar-lector", "--sin-correo", "-c", str(config)])
+
+    assert resultado.exit_code == 1, resultado.output
+    assert "Reporte de la semana 2026-10-12 al 2026-10-18: NO ha salido" in resultado.output
+    assert (tmp_path / "estado.db").exists()

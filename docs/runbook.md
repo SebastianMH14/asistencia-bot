@@ -45,6 +45,7 @@ Para quien opera el bot en el equipo de HikCentral. Los comandos se ejecutan en 
 | En `logs\tarea.log`: `Una directiva de Control de aplicaciones bloqueó este archivo` (y no llegó ningún correo) | El Control inteligente de aplicaciones de Windows bloqueó Python o el bot ([ADR-0007](adr/0007-lanzar-con-python-m.md)) | Volver a lanzar la tarea (sección 10). Si se repite, la solución es desactivar ese control en Seguridad de Windows. Es irreversible: lo decide el cliente |
 | En el log: `HikCentral avisa que la contraseña caduca pronto` | La contraseña de `admin` en HikCentral está por vencer. El bot cierra el aviso con "Ignorar" y sigue, pero cuando venza **la cuenta se bloquea** | Cambiar la contraseña en HikCentral y luego `credenciales configurar hikcentral -u admin` (sección 6) |
 | `[asistencia-bot] ALERTA – el lector no envía marcaciones` (entre semana, 10:00) | HikCentral no recibe eventos del lector, aunque lo muestre conectado | Sección 11 |
+| `[asistencia-bot] ALERTA – el reporte semanal no salió` (desde el lunes, 10:00) | La tarea del lunes no corrió o no terminó: equipo apagado, Windows bloqueó el programa o la tarea está deshabilitada ([ADR-0008](adr/0008-aviso-reporte-y-python-firmado.md)) | Sección 11 |
 | `no se procesó` en todos los grupos | Hubo un error fatal antes (ver el encabezado del resumen) | Resolver el error fatal |
 
 **Evidencias:** cuando un grupo falla, el resumen adjunta una captura (`capturas\`) y, si existe, un *trace* de Playwright (`traces\`).
@@ -188,8 +189,18 @@ La tarea `asistencia-bot - vigilancia del lector` corre **de lunes a sábado a l
 
 **Si llega "no se pudo revisar el lector":** el log cambió de ruta, probablemente por una actualización de HikCentral. Busca `EventStatistics.log` en `C:\Program Files (x86)\HikCentral Access Control\VSM Servers\Log\SYS\` y ajusta `[vigilancia] log_eventos` en `config\settings.toml`.
 
+**Control del reporte semanal** ([ADR-0008](adr/0008-aviso-reporte-y-python-firmado.md)). La misma vigilancia revisa también que haya salido el reporte de la semana anterior.
+- Desde el lunes a las 09:00 (`[vigilancia] plazo_reporte`), si no hay ninguna ejecución de producción terminada de esa semana, el administrador recibe `[asistencia-bot] ALERTA – el reporte semanal no salió (semana …)`.
+- El aviso se repite de lunes a sábado a las 10:00 mientras falte.
+- Solo se revisa con `modo_por_defecto = "produccion"`.
+
+**Si llega "el reporte semanal no salió":**
+1. Si el equipo se acaba de encender, esperar unos 20 minutos: el reporte puede estar saliendo.
+2. Lanzar la tarea a mano (sección 10). Solo envía lo que falta.
+3. Si no llega el resumen, revisar `logs\tarea.log` y el registro `Microsoft-Windows-CodeIntegrity/Operational` (sección 3).
+
 **Revisar a mano:**
 
 ```powershell
-asistencia-bot vigilar-lector --sin-correo     # marcaciones de hoy y la última recibida; no envía nada
+asistencia-bot vigilar-lector --sin-correo     # marcaciones de hoy, última recibida y si salió el reporte; no envía nada
 ```

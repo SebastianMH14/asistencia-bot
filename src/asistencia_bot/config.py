@@ -9,6 +9,7 @@ import os
 import re
 import tomllib
 from dataclasses import dataclass
+from datetime import time
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlparse
@@ -136,6 +137,10 @@ class ConfigVigilancia(_Modelo):
         r"C:\Program Files (x86)\HikCentral Access Control\VSM Servers\Log\SYS"
         r"\baseacs.d\EventStatistics.log"
     )
+    # Hora del lunes para la que el reporte semanal ya tuvo que salir (la tarea corre a las 05:00).
+    # Desde esa hora, `vigilar-lector` avisa si no hay ejecución de producción de la semana
+    # anterior (ADR-0008). Solo se revisa con modo_por_defecto = "produccion".
+    plazo_reporte: time = time(9, 0)
 
 
 class Ajustes(BaseSettings):

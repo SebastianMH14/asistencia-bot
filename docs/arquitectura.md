@@ -542,8 +542,9 @@ Antes de la primera ejecución real se puede registrar un **ensayo** (`-Ensayo '
 - Corre de lunes a sábado a las 10:00 (`-HoraVigilancia`), con el mismo usuario y la misma seguridad que la semanal.
 - Lanza `pythonw -m asistencia_bot vigilar-lector`, sin ventana, con un límite de 10 min.
 - Si hoy no han llegado marcaciones a HikCentral, avisa al administrador el mismo día en vez del lunes siguiente.
+- Desde el lunes a las 09:00 (`[vigilancia] plazo_reporte`), si no hay ejecución de producción terminada de la semana anterior, avisa que el reporte no salió (ADR-0008). Así un fallo que impide arrancar al bot no pasa en silencio.
 
-**Límite conocido:** si el equipo se reinicia y nadie inicia sesión, la tarea no corre ni avisa. Se mitiga con el inicio de sesión automático de Windows (con bloqueo de pantalla) y con horas activas de Windows Update que cubran las 05:00.
+**Límite conocido:** si el equipo se reinicia y nadie inicia sesión, la tarea no corre ni avisa. En este equipo la sesión se abre sola al arrancar (verificado el 2026-11-08 con los reinicios desde septiembre); queda el caso de un corte de luz si el equipo no vuelve a encenderse solo.
 
 La operación diaria (cambiar destinatarios, reenviar con `--forzar`, qué hacer ante cada código de salida) va en `docs/runbook.md`.
 
@@ -595,6 +596,7 @@ Metas:
 | [0005](adr/0005-validacion-de-filas.md) | Validación de filas frente a la paginación rota de HikCentral | Aceptada |
 | [0006](adr/0006-vigilancia-del-lector.md) | Vigilancia diaria del lector a partir del log de HikCentral | Aceptada |
 | [0007](adr/0007-lanzar-con-python-m.md) | Lanzar el bot con `python -m asistencia_bot` (Control inteligente de aplicaciones) | Aceptada |
+| [0008](adr/0008-aviso-reporte-y-python-firmado.md) | Aviso si el reporte semanal no sale, y Python firmado | Aceptada |
 
 ## 20. Estructura del repositorio
 
@@ -603,7 +605,7 @@ asistencia-bot/
 ├─ CLAUDE.md, DISCOVERY.md, README.md
 ├─ pyproject.toml / uv.lock          dependencias (uv, Python 3.13)
 ├─ config/                           settings.example.toml, grupos.example.yaml (los reales no se versionan)
-├─ docs/                             arquitectura.md, runbook.md, guia-cliente.md, adr/0001–0007
+├─ docs/                             arquitectura.md, runbook.md, guia-cliente.md, adr/0001–0008
 ├─ exploracion/                      herramientas de la Fase 1 (no es código de producción)
 ├─ scripts/                          registrar_tarea.ps1 (registra las tareas), ejecutar_tarea.ps1 (lo que corre la semanal)
 ├─ src/asistencia_bot/

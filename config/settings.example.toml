@@ -57,3 +57,6 @@ correo = "admin@ejemplo.com"      # recibe resúmenes, alertas y, en modo prueba
 # Log de HikCentral con los eventos que recibe de los lectores (ADR-0006). Lo lee
 # `asistencia-bot vigilar-lector`; esta es la ruta de una instalación por defecto.
 # log_eventos = 'C:\Program Files (x86)\HikCentral Access Control\VSM Servers\Log\SYS\baseacs.d\EventStatistics.log'
+# Hora del lunes desde la que `vigilar-lector` avisa si el reporte semanal no salió (ADR-0008).
+# Solo se revisa con modo_por_defecto = "produccion".
+# plazo_reporte = "09:00"

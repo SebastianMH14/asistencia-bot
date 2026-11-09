@@ -1,0 +1,16 @@
+Hoy, {{ fecha }} a las {{ hora }}, no hay registro de que el bot haya enviado el reporte de asistencia de la semana del {{ desde }} al {{ hasta }}. Los jefes de área no lo han recibido.
+
+Lo normal es que salga el lunes a las 05:00. Las causas más probables:
+- El equipo estaba apagado o sin la sesión de Windows iniciada.
+- Windows bloqueó el programa (Control inteligente de aplicaciones).
+- La tarea programada "asistencia-bot - reporte semanal" está deshabilitada.
+
+Si el equipo se acaba de encender, el reporte puede estar saliendo en este momento: espere unos 20 minutos el resumen de la ejecución antes de hacer nada.
+
+Qué hacer:
+1. En el equipo del bot, abrir el Programador de tareas, buscar "asistencia-bot - reporte semanal" y pulsar Ejecutar. Envía solo lo que falta: no repite lo que ya se envió.
+2. A los pocos minutos debe llegarle el resumen de la ejecución. Si no llega, revisar logs\tarea.log en la carpeta del bot y avisar a soporte.
+
+Este aviso se repite de lunes a sábado a las 10:00 mientras el reporte no salga.
+
+Revisión automática de asistencia-bot · versión {{ version }} · equipo {{ equipo }}

@@ -21,7 +21,7 @@ from asistencia_bot.domain.modelos import (
     Periodo,
     ResultadoGrupo,
 )
-from asistencia_bot.domain.vigilancia import EstadoLector
+from asistencia_bot.domain.vigilancia import EstadoLector, EstadoReporte
 
 MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 GUION = chr(0x2013)  # raya (en dash) del asunto acordado con el cliente
@@ -186,6 +186,27 @@ class RenderizadorJinja:
         return Correo(
             para=(para,),
             asunto=f"[asistencia-bot] ALERTA {GUION} {motivo} ({ahora:%d/%m %H:%M})",
+            texto=texto,
+            html=html,
+        )
+
+    def correo_alerta_reporte(self, para: str, ahora: datetime, reporte: EstadoReporte) -> Correo:
+        p = reporte.periodo
+        contexto = {
+            "fecha": f"{DIAS_SEMANA[ahora.weekday()]} {ahora:%d/%m/%Y}",
+            "hora": f"{ahora:%H:%M}",
+            "desde": f"{p.desde:%d/%m/%Y}",
+            "hasta": f"{p.hasta:%d/%m/%Y}",
+            "version": self._version,
+            "equipo": socket.gethostname(),
+        }
+        texto, html = self._render("correo_alerta_reporte", contexto)
+        return Correo(
+            para=(para,),
+            asunto=(
+                f"[asistencia-bot] ALERTA {GUION} el reporte semanal no salió "
+                f"(semana {p.desde:%d/%m} al {p.hasta:%d/%m})"
+            ),
             texto=texto,
             html=html,
         )

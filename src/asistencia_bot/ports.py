@@ -19,7 +19,7 @@ from asistencia_bot.domain.modelos import (
     ReporteExportado,
     ResultadoGrupo,
 )
-from asistencia_bot.domain.vigilancia import EstadoLector, MuestraEventos
+from asistencia_bot.domain.vigilancia import EstadoLector, EstadoReporte, MuestraEventos
 
 
 class Reloj(Protocol):
@@ -117,6 +117,10 @@ class RenderizadorCorreos(Protocol):
         self, para: str, ahora: datetime, estado: EstadoLector | None, error: str | None
     ) -> Correo:
         """Aviso al administrador: hoy no llegan marcaciones, o no se pudo revisar (`error`)."""
+        ...
+
+    def correo_alerta_reporte(self, para: str, ahora: datetime, reporte: EstadoReporte) -> Correo:
+        """Aviso al administrador: el reporte de la semana anterior no ha salido (ADR-0008)."""
         ...
 
 

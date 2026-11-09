@@ -240,9 +240,11 @@ def vigilar_lector(
     ] = False,
     config: ConfigOpt = None,
 ) -> None:
-    """Revisa que hoy hayan llegado marcaciones a HikCentral; si no, avisa al administrador.
+    """Revisa que hoy lleguen marcaciones y que haya salido el reporte semanal; si no, avisa.
 
-    Códigos: 0 hay marcaciones, 1 no hay o no se pudo revisar, 2 había que avisar y no se pudo.
+    El reporte solo se revisa en producción y desde el plazo del lunes ([vigilancia]
+    plazo_reporte). Códigos: 0 todo bien, 1 sin marcaciones, reporte sin salir o no se pudo
+    revisar, 2 había que avisar al administrador y no se pudo.
     """
     cfg = _cargar(config)
     # Con pythonw (la tarea diaria, sin ventana) no hay consola.
@@ -258,6 +260,17 @@ def vigilar_lector(
         )
     if r.alerta_enviada:
         typer.echo("Se avisó al administrador.")
+    if r.reporte is not None:
+        p = r.reporte.periodo
+        semana = f"Reporte de la semana {p.desde:%Y-%m-%d} al {p.hasta:%Y-%m-%d}"
+        if r.reporte.ultima_ejecucion:
+            typer.echo(f"{semana}: corrió el {r.reporte.ultima_ejecucion:%Y-%m-%d %H:%M}")
+        else:
+            typer.echo(f"{semana}: NO ha salido")
+    elif r.error_reporte:
+        typer.echo(f"No se pudo revisar si salió el reporte semanal: {r.error_reporte}")
+    if r.alerta_reporte_enviada:
+        typer.echo("Se avisó al administrador que el reporte no salió.")
     if r.error_envio:
         typer.echo(f"No se pudo avisar al administrador: {r.error_envio}")
     raise typer.Exit(r.codigo_salida)
